@@ -113,233 +113,117 @@ export default function Login() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-primary/5">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-2 gap-8 items-center">
-          <div>
-            <Link to="/" className="flex items-center gap-3 mb-12">
-              <div className="p-3 rounded-lg bg-primary text-primary-foreground">
-                <Recycle className="w-6 h-6" />
-              </div>
-              <span className="font-bold text-2xl text-foreground">E-Waste Hub</span>
-            </Link>
-            <h1 className="text-4xl font-bold text-foreground mb-4">Welcome Back</h1>
-            <p className="text-lg text-muted-foreground mb-8">
-              Sign in with your Google account or email
-            </p>
-            <div className="space-y-4">
-              <div className="flex items-start gap-4">
-                <div className="p-2 rounded-lg bg-accent/20 flex-shrink-0">
-                  <Recycle className="w-5 h-5 text-accent" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground">End-to-End Traceability</h3>
-                  <p className="text-sm text-muted-foreground">Track every item from source to recycler</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="p-2 rounded-lg bg-accent/20 flex-shrink-0">
-                  <Recycle className="w-5 h-5 text-accent" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground">Verified Handoffs</h3>
-                  <p className="text-sm text-muted-foreground">QR verification at every step ensures integrity</p>
-                </div>
-              </div>
-            </div>
+    <div className="min-h-screen bg-background">
+      <div className="max-w-md mx-auto px-4 py-12">
+        <Link to="/" className="flex items-center gap-2 mb-8">
+          <Recycle className="w-5 h-5 text-primary" />
+          <span className="font-bold text-foreground">E-Waste Hub</span>
+        </Link>
+
+        <h1 className="text-2xl font-bold text-foreground mb-1">Welcome Back</h1>
+        <p className="text-muted-foreground mb-6">Sign in to your account</p>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+            <p className="text-destructive text-sm">{error}</p>
           </div>
+        )}
 
-          <div>
-            <div className="bg-card rounded-lg border border-border p-8 shadow-lg">
-              <h2 className="text-2xl font-bold text-foreground mb-6">Login</h2>
-
-              {error && (
-                <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-                  <p className="text-destructive text-sm">{error}</p>
-                </div>
-              )}
-
-              <div className="mb-4">
-                <GoogleSignInButton
-                  mode="signin"
-                  onSuccess={handleGoogleSignIn}
-                  onError={(e) => setError(e.message)}
-                  className="flex justify-center"
-                />
-              </div>
-
-              <p className="text-center text-sm text-muted-foreground mb-4">— or sign in with email —</p>
-
-              <Tabs defaultValue="email" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-4">
-                  <TabsTrigger value="email" className="gap-1.5">
-                    <Mail className="w-4 h-4" />
-                    Email
-                  </TabsTrigger>
-                  <TabsTrigger value="gmail" className="gap-1.5">
-                    <Mail className="w-4 h-4" />
-                    Gmail code
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="email">
-                  <form onSubmit={handleEmailSubmit} className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Email</label>
-                      <Input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="user@example.com"
-                        className="w-full"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Password</label>
-                      <Input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full"
-                        required
-                      />
-                    </div>
-                    <Button type="submit" disabled={isLoading} className="w-full gap-2">
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Logging in...
-                        </>
-                      ) : (
-                        'Login'
-                      )}
-                    </Button>
-                  </form>
-                  <div className="mt-6 pt-6 border-t border-border">
-                    <p className="text-sm text-muted-foreground mb-4">Demo credentials:</p>
-                    <div className="grid gap-2">
-                      {demoCredentials.slice(0, 4).map((cred) => (
-                        <button
-                          key={cred.email}
-                          type="button"
-                          onClick={() => {
-                            setEmail(cred.email);
-                            setPassword(cred.password);
-                          }}
-                          className="text-left px-3 py-2 rounded-lg hover:bg-muted transition-colors text-xs border border-border"
-                        >
-                          <p className="font-medium text-foreground">{cred.role}</p>
-                          <p className="text-muted-foreground">{cred.email}</p>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="grid gap-2 mt-2">
-                      {demoCredentials.slice(4).map((cred) => (
-                        <button
-                          key={cred.email}
-                          type="button"
-                          onClick={() => {
-                            setEmail(cred.email);
-                            setPassword(cred.password);
-                          }}
-                          className="text-left px-3 py-2 rounded-lg hover:bg-muted transition-colors text-xs border border-border"
-                        >
-                          <p className="font-medium text-foreground">{cred.role}</p>
-                          <p className="text-muted-foreground">{cred.email}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="gmail">
-                  {!emailCodeSent ? (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Gmail address</label>
-                        <Input
-                          type="email"
-                          value={gmailEmail}
-                          onChange={(e) => setGmailEmail(e.target.value)}
-                          placeholder="you@gmail.com"
-                          className="w-full"
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        We&apos;ll send a 6-digit verification code to your inbox.
-                      </p>
-                      <Button
-                        type="button"
-                        onClick={handleSendEmailCode}
-                        disabled={isLoading}
-                        className="w-full gap-2"
-                      >
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Sending code...
-                          </>
-                        ) : (
-                          'Send code to Gmail'
-                        )}
-                      </Button>
-                    </div>
-                  ) : (
-                    <form onSubmit={handleVerifyEmailCode} className="space-y-4">
-                      <p className="text-sm text-muted-foreground">
-                        Enter the 6-digit code sent to {gmailEmail}
-                      </p>
-                      <div className="flex justify-center">
-                        <InputOTP
-                          maxLength={6}
-                          value={emailCode}
-                          onChange={(value) => setEmailCode(value)}
-                        >
-                          <InputOTPGroup className="gap-1">
-                            {[0, 1, 2, 3, 4, 5].map((i) => (
-                              <InputOTPSlot key={i} index={i} />
-                            ))}
-                          </InputOTPGroup>
-                        </InputOTP>
-                      </div>
-                      <Button type="submit" disabled={isLoading || emailCode.length !== 6} className="w-full gap-2">
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Verifying...
-                          </>
-                        ) : (
-                          'Verify code'
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="w-full"
-                        onClick={() => {
-                          setEmailCodeSent(false);
-                          setEmailCode('');
-                        }}
-                      >
-                        Use different email
-                      </Button>
-                    </form>
-                  )}
-                </TabsContent>
-              </Tabs>
-
-              <p className="mt-6 text-center text-sm text-muted-foreground">
-                Don&apos;t have an account?{' '}
-                <Link to="/register" className="text-primary hover:underline font-medium">
-                  Register here
-                </Link>
-              </p>
-            </div>
-          </div>
+        <div className="mb-4">
+          <GoogleSignInButton
+            mode="signin"
+            onSuccess={handleGoogleSignIn}
+            onError={(e) => setError(e.message)}
+            className="flex justify-center"
+          />
         </div>
+
+        <p className="text-center text-sm text-muted-foreground mb-4">or sign in with email</p>
+
+        <Tabs defaultValue="email" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="email" className="gap-1.5">
+              <Mail className="w-4 h-4" />
+              Email
+            </TabsTrigger>
+            <TabsTrigger value="gmail" className="gap-1.5">
+              <Mail className="w-4 h-4" />
+              Gmail code
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="email">
+            <form onSubmit={handleEmailSubmit} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Email</label>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Password</label>
+                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
+              </div>
+              <Button type="submit" disabled={isLoading} className="w-full gap-2">
+                {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Logging in...</> : 'Login'}
+              </Button>
+            </form>
+            <div className="mt-4 pt-4 border-t border-border">
+              <p className="text-sm text-muted-foreground mb-2">Demo credentials:</p>
+              <div className="grid gap-1.5">
+                {demoCredentials.map((cred) => (
+                  <button
+                    key={cred.email}
+                    type="button"
+                    onClick={() => { setEmail(cred.email); setPassword(cred.password); }}
+                    className="text-left px-3 py-1.5 rounded hover:bg-muted text-xs border border-border"
+                  >
+                    <span className="font-medium text-foreground">{cred.role}</span>
+                    <span className="text-muted-foreground ml-2">{cred.email}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="gmail">
+            {!emailCodeSent ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Gmail address</label>
+                  <Input type="email" value={gmailEmail} onChange={(e) => setGmailEmail(e.target.value)} placeholder="you@gmail.com" />
+                </div>
+                <p className="text-xs text-muted-foreground">We'll send a 6-digit verification code to your inbox.</p>
+                <Button type="button" onClick={handleSendEmailCode} disabled={isLoading} className="w-full gap-2">
+                  {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending code...</> : 'Send code to Gmail'}
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={handleVerifyEmailCode} className="space-y-3">
+                <p className="text-sm text-muted-foreground">Enter the 6-digit code sent to {gmailEmail}</p>
+                <div className="flex justify-center">
+                  <InputOTP maxLength={6} value={emailCode} onChange={(value) => setEmailCode(value)}>
+                    <InputOTPGroup className="gap-1">
+                      {[0, 1, 2, 3, 4, 5].map((i) => (
+                        <InputOTPSlot key={i} index={i} />
+                      ))}
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+                <Button type="submit" disabled={isLoading || emailCode.length !== 6} className="w-full gap-2">
+                  {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</> : 'Verify code'}
+                </Button>
+                <Button type="button" variant="ghost" className="w-full" onClick={() => { setEmailCodeSent(false); setEmailCode(''); }}>
+                  Use different email
+                </Button>
+              </form>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          Don&apos;t have an account?{' '}
+          <Link to="/register" className="text-primary hover:underline font-medium">Register here</Link>
+        </p>
       </div>
     </div>
   );

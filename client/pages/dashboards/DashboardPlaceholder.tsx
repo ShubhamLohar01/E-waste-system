@@ -25,17 +25,14 @@ export default function DashboardPlaceholder({
 }: DashboardPlaceholderProps) {
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-card">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-              <div className="p-2 rounded-lg bg-primary text-primary-foreground">
-                <Package className="w-5 h-5" />
-              </div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between h-14">
+            <Link to="/" className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-primary" />
               <span className="font-bold text-foreground">E-Waste Hub</span>
             </Link>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground">{roleName}</span>
               <Button variant="outline" size="sm">
                 <LogOut className="w-4 h-4 mr-2" />
@@ -46,84 +43,60 @@ export default function DashboardPlaceholder({
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Hero */}
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6">
-            <Icon className="w-8 h-8 text-primary" />
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <Icon className="w-6 h-6 text-primary" />
+            <h1 className="text-2xl font-bold text-foreground">{roleName}</h1>
           </div>
-          <h1 className="text-4xl font-bold text-foreground mb-4">{roleName}</h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-6">
-            {roleDescription}
-          </p>
-          <div className="flex items-center justify-center gap-3">
-            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/10 text-secondary font-medium text-sm">
-              <Zap className="w-4 h-4" />
-              {trustLevel}
-            </span>
-          </div>
+          <p className="text-muted-foreground mb-2">{roleDescription}</p>
+          <span className="text-xs font-medium px-2 py-0.5 rounded bg-muted text-muted-foreground">
+            {trustLevel}
+          </span>
         </div>
 
         {/* Key Features */}
-        <section className="mb-16">
-          <h2 className="text-2xl font-bold text-foreground mb-8 text-center">
-            Dashboard Features
-          </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="mb-8">
+          <h2 className="text-lg font-bold text-foreground mb-4">Dashboard Features</h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
             {features.map((feature) => (
-              <div
-                key={feature}
-                className="p-6 rounded-lg border border-border bg-card hover:border-primary/50 transition-colors"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="p-2 rounded-lg bg-accent/10 flex-shrink-0">
-                    <Zap className="w-5 h-5 text-accent" />
-                  </div>
-                  <p className="font-medium text-foreground">{feature}</p>
+              <div key={feature} className="p-4 rounded-lg border border-border bg-card">
+                <div className="flex items-start gap-3">
+                  <Zap className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                  <p className="text-sm font-medium text-foreground">{feature}</p>
                 </div>
               </div>
             ))}
           </div>
-        </section>
+        </div>
 
         {/* Development Notice */}
-        <section className="max-w-2xl mx-auto">
-          <div className="p-8 rounded-lg border border-accent/50 bg-accent/5">
-            <div className="flex items-start gap-4">
-              <AlertCircle className="w-6 h-6 text-accent flex-shrink-0 mt-1" />
+        <div className="max-w-2xl">
+          <div className="p-4 rounded-lg border border-border bg-card">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
               <div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">
-                  Dashboard in Development
-                </h3>
-                <p className="text-muted-foreground mb-6">
-                  This {roleName.toLowerCase()} dashboard is being customized with
-                  specific workflows and tools. The full functionality will be
-                  available soon.
+                <h3 className="font-medium text-foreground mb-1">Dashboard in Development</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  This {roleName.toLowerCase()} dashboard is being customized with specific workflows and tools.
                 </p>
-                <div className="flex gap-3 flex-wrap">
-                  <Button variant="outline">
-                    View Documentation
-                  </Button>
-                  <Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm">View Documentation</Button>
+                  <Button size="sm">
                     Request Demo
-                    <ArrowRight className="w-4 h-4 ml-2" />
+                    <ArrowRight className="w-4 h-4 ml-1" />
                   </Button>
                 </div>
               </div>
             </div>
           </div>
-        </section>
+        </div>
 
-        {/* Back to Home */}
-        <div className="text-center mt-12">
-          <p className="text-muted-foreground mb-4">
-            Want to try a different role?
-          </p>
+        <div className="mt-8">
           <Link to="/">
-            <Button variant="outline">
+            <Button variant="outline" size="sm">
               Back to Home
-              <ArrowRight className="w-4 h-4 ml-2" />
+              <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </Link>
         </div>
