@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find 'd:/E-waste management system/ewaste-system/server' -name *.js)",
+      "Bash(find 'd:/E-waste management system/ewaste-system/client' -name *.jsx -o -name *.js ! -path */node_modules/*)",
+      "Bash(find 'd:/E-waste management system/ewaste-system' \\\\\\(-name *.ts -o -name *.tsx \\\\\\) ! -path */node_modules/* ! -path */dist/*)"
+    ]
+  }
+}
