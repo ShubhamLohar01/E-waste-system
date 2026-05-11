@@ -24,6 +24,12 @@ import {
   ImagePlus,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import NotificationsBell from "@/components/NotificationsBell";
+import RaiseDisputeDialog from "@/components/RaiseDisputeDialog";
+import GoogleMapDirections from "@/components/GoogleMapDirections";
+import CameraCapture from "@/components/CameraCapture";
+import { api } from "@/lib/api";
+import { Coins, Navigation, ChevronDown, ChevronUp, ExternalLink, Mail } from "lucide-react";
 
 export default function LocalCollectorDashboard() {
   const { user, token, logout } = useAuth();
@@ -32,6 +38,7 @@ export default function LocalCollectorDashboard() {
   const [pendingIntents, setPendingIntents] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [hubs, setHubs] = useState([]);
+  const [rewardPoints, setRewardPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
 
@@ -41,6 +48,12 @@ export default function LocalCollectorDashboard() {
   const [selectedIntentId, setSelectedIntentId] = useState("");
   /** Photo (data URL) per assignment - required before marking as collected */
   const [photoByAssignment, setPhotoByAssignment] = useState({});
+  /** Per-assignment toggle for the directions panel */
+  const [showDirections, setShowDirections] = useState({});
+  /** Per-hub toggle for the Hubs tab directions */
+  const [showHubDirections, setShowHubDirections] = useState({});
+  /** Which assignment (if any) has the in-app camera open */
+  const [cameraForAssignment, setCameraForAssignment] = useState(null);
 
   const apiFetch = useCallback(
     async (url, options) => {
@@ -76,6 +89,11 @@ export default function LocalCollectorDashboard() {
         const data = await hubRes.json();
         setHubs(data.hubs || []);
       }
+      // My reward counter (via centralized api helper)
+      try {
+        const rw = await api.get("/api/rewards/mine");
+        setRewardPoints(rw?.totalPoints ?? 0);
+      } catch { /* ignore */ }
     } catch (err) {
       console.error("Failed to fetch data:", err);
     }
@@ -201,8 +219,8 @@ export default function LocalCollectorDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 
@@ -238,8 +256,19 @@ export default function LocalCollectorDashboard() {
                 <span className="font-bold text-foreground">E-Waste Hub</span>
               </Link>
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground hidden sm:block">{user?.name}</span>
+            <div className="flex items-center gap-3">
+              <NotificationsBell />
+              <span
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-sm font-medium"
+                title="Your reward points"
+              >
+                <Coins className="w-4 h-4" />
+                {Math.round(rewardPoints)} pts
+              </span>
+              <Link to="/profile">
+                <Button variant="outline" size="sm" className="hidden sm:inline-flex">Profile</Button>
+              </Link>
+              <span className="text-sm text-muted-foreground hidden md:inline">{user?.name}</span>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
@@ -280,7 +309,7 @@ export default function LocalCollectorDashboard() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 border-b border-border overflow-x-auto">
-          {["pending", "assigned", "collected", "history"].map((tab) => (
+          {["pending", "assigned", "collected", "hubs", "history"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -302,6 +331,7 @@ export default function LocalCollectorDashboard() {
               )}
               {tab === "assigned" && `My Pickups (${assignedIntents.length})`}
               {tab === "collected" && `Ready for Hub (${collectedIntents.length})`}
+              {tab === "hubs" && `Hubs (${hubs.length})`}
               {tab === "history" && "History"}
             </button>
           ))}
@@ -328,9 +358,16 @@ export default function LocalCollectorDashboard() {
                         Submitted {new Date(intent.createdAt).toLocaleString()}
                       </p>
                     </div>
-                    <span className="px-3 py-1.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/30">
-                      New Request
-                    </span>
+                    <div className="text-right">
+                      <span className="px-3 py-1.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/30">
+                        New Request
+                      </span>
+                      {intent.distanceKm != null && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          ~ {intent.distanceKm} km from you
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid sm:grid-cols-2 gap-4 mb-4 p-4 rounded-lg bg-background">
@@ -439,61 +476,139 @@ export default function LocalCollectorDashboard() {
 
                   {/* Step 1: Take/upload photo of items (required before collect) */}
                   <div className="mb-4 p-4 rounded-lg border border-amber-200 bg-amber-50/50">
-                    <p className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                    <p className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
                       <Camera className="w-4 h-4 text-amber-600" />
-                      Take or upload a photo of the item(s)
+                      Photo of the item(s) — required before marking collected
                     </p>
+
                     <input
                       type="file"
                       accept="image/*"
-                      capture="environment"
                       className="hidden"
                       id={`photo-${assignment._id}`}
                       onChange={(e) => handlePhotoChange(assignment._id, e)}
                     />
+
                     {photoByAssignment[assignment._id] ? (
                       <div className="flex flex-wrap items-center gap-3">
                         <img
                           src={photoByAssignment[assignment._id]}
                           alt="Collection proof"
-                          className="w-24 h-24 rounded-lg object-cover border border-border"
+                          className="w-28 h-28 rounded-lg object-cover border border-border"
                         />
                         <div className="flex flex-col gap-2">
                           <span className="text-xs text-green-600 font-medium flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             Photo added
                           </span>
-                          <label htmlFor={`photo-${assignment._id}`} className="cursor-pointer">
-                            <span className="text-sm text-primary font-medium hover:underline flex items-center gap-1">
-                              <ImagePlus className="w-4 h-4" />
-                              Change photo
-                            </span>
-                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 h-8"
+                              onClick={() => setCameraForAssignment(assignment._id)}
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                              Retake with camera
+                            </Button>
+                            <label htmlFor={`photo-${assignment._id}`} className="cursor-pointer">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-md border border-border bg-background text-sm hover:bg-muted">
+                                <ImagePlus className="w-3.5 h-3.5" />
+                                Choose different file
+                              </span>
+                            </label>
+                          </div>
                         </div>
                       </div>
                     ) : (
-                      <label
-                        htmlFor={`photo-${assignment._id}`}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-300 bg-white hover:bg-amber-50 text-amber-800 font-medium cursor-pointer transition-colors"
-                      >
-                        <Camera className="w-4 h-4" />
-                        Click to take photo or upload image
-                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          className="gap-2"
+                          onClick={() => setCameraForAssignment(assignment._id)}
+                        >
+                          <Camera className="w-4 h-4" />
+                          Open camera
+                        </Button>
+                        <label htmlFor={`photo-${assignment._id}`}>
+                          <span className="inline-flex items-center gap-2 px-4 h-10 rounded-md border border-amber-300 bg-white hover:bg-amber-50 text-amber-800 font-medium cursor-pointer transition-colors">
+                            <ImagePlus className="w-4 h-4" />
+                            Upload from files
+                          </span>
+                        </label>
+                      </div>
                     )}
+
+                    <p className="mt-2 text-[11px] text-amber-900/70">
+                      Tip: on mobile, <strong>Open camera</strong> switches on the rear camera automatically. On desktop,
+                      your webcam is used.
+                    </p>
                   </div>
 
-                  <Button
-                    onClick={() => handleCollect(assignment)}
-                    disabled={actionLoading === assignment._id || !photoByAssignment[assignment._id]}
-                    className="gap-2"
-                  >
-                    {actionLoading === assignment._id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4" />
-                    )}
-                    {photoByAssignment[assignment._id] ? "Mark as Collected" : "Add photo first to mark collected"}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      onClick={() => handleCollect(assignment)}
+                      disabled={actionLoading === assignment._id || !photoByAssignment[assignment._id]}
+                      className="gap-2"
+                    >
+                      {actionLoading === assignment._id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4" />
+                      )}
+                      {photoByAssignment[assignment._id] ? "Mark as Collected" : "Add photo first to mark collected"}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() =>
+                        setShowDirections((prev) => ({
+                          ...prev,
+                          [assignment._id]: !prev[assignment._id],
+                        }))
+                      }
+                    >
+                      <Navigation className="w-4 h-4" />
+                      {showDirections[assignment._id] ? (
+                        <>
+                          Hide directions <ChevronUp className="w-3.5 h-3.5" />
+                        </>
+                      ) : (
+                        <>
+                          Get directions <ChevronDown className="w-3.5 h-3.5" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* Directions panel: collector's current location → user's pickup */}
+                  {showDirections[assignment._id] && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <div className="mb-3">
+                        <p className="text-sm font-semibold text-foreground">Navigate to pickup</p>
+                        <p className="text-xs text-muted-foreground">
+                          {assignment.location?.address || "Address not specified"}
+                        </p>
+                      </div>
+                      {assignment.location?.lat != null && assignment.location?.lng != null ? (
+                        <GoogleMapDirections
+                          destination={{
+                            lat: assignment.location.lat,
+                            lng: assignment.location.lng,
+                            address: assignment.location.address,
+                          }}
+                          originFallback={user?.location}
+                        />
+                      ) : (
+                        <div className="p-3 rounded-md border border-amber-200 bg-amber-50 text-xs text-amber-900">
+                          This pickup has no coordinates recorded — only an address. Please use the address in your own maps app.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -538,17 +653,141 @@ export default function LocalCollectorDashboard() {
                       ))}
                     </div>
 
-                    <Button
-                      onClick={() => openDeliveryDialog(assignment)}
-                      className="gap-2"
-                    >
-                      <Truck className="w-4 h-4" />
-                      Deliver to Hub
-                      <ArrowRight className="w-4 h-4" />
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button onClick={() => openDeliveryDialog(assignment)} className="gap-2">
+                        <Truck className="w-4 h-4" />
+                        Deliver to Hub
+                        <ArrowRight className="w-4 h-4" />
+                      </Button>
+                      <RaiseDisputeDialog
+                        relatedInventoryId={collectedItems[0]?._id}
+                        triggerLabel="Report issue"
+                      />
+                    </div>
                   </div>
                 );
               })
+            )}
+          </div>
+        )}
+
+        {activeTab === "hubs" && (
+          <div className="space-y-4">
+            <div className="p-4 rounded-lg border border-primary/20 bg-primary/5">
+              <p className="text-sm text-foreground">
+                Hubs sorted by distance from your profile address. Drop collected items at the nearest one — or click
+                <strong> Get directions</strong> to see the route.
+              </p>
+            </div>
+
+            {hubs.length === 0 ? (
+              <div className="p-12 rounded-lg border border-dashed border-border text-center">
+                <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">No hubs configured</h3>
+                <p className="text-muted-foreground">Admin will add hubs shortly.</p>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-4">
+                {hubs.map((hub, idx) => {
+                  const isNearest = idx === 0;
+                  const mapsUrl =
+                    hub.lat != null && hub.lng != null
+                      ? `https://www.google.com/maps/dir/?api=1&destination=${hub.lat},${hub.lng}&travelmode=driving`
+                      : null;
+                  return (
+                    <div
+                      key={hub._id}
+                      className={`p-5 rounded-lg border bg-card ${
+                        isNearest ? "border-primary/40 bg-primary/5" : "border-border"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-3 gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-base font-semibold text-foreground">{hub.name}</h3>
+                            {isNearest && (
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
+                                Nearest
+                              </span>
+                            )}
+                          </div>
+                          {hub.distanceKm != null && (
+                            <p className="text-xs text-primary font-semibold mt-0.5">
+                              ~ {hub.distanceKm} km from you
+                            </p>
+                          )}
+                        </div>
+                        <Building2 className="w-5 h-5 text-primary flex-shrink-0" />
+                      </div>
+
+                      <div className="space-y-2 text-sm mb-4">
+                        <div className="flex items-start gap-2">
+                          <MapPin className="w-3.5 h-3.5 mt-1 text-muted-foreground flex-shrink-0" />
+                          <p className="text-foreground">{hub.address || "Address not available"}</p>
+                        </div>
+                        {hub.phone && (
+                          <div className="flex items-center gap-2">
+                            <Phone className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                            <a href={`tel:${hub.phone}`} className="text-foreground hover:underline">
+                              {hub.phone}
+                            </a>
+                          </div>
+                        )}
+                        {hub.email && (
+                          <div className="flex items-center gap-2">
+                            <Mail className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                            <a href={`mailto:${hub.email}`} className="text-foreground hover:underline">
+                              {hub.email}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() =>
+                            setShowHubDirections((p) => ({ ...p, [hub._id]: !p[hub._id] }))
+                          }
+                          disabled={hub.lat == null || hub.lng == null}
+                        >
+                          <Navigation className="w-4 h-4" />
+                          {showHubDirections[hub._id] ? (
+                            <>
+                              Hide directions <ChevronUp className="w-3.5 h-3.5" />
+                            </>
+                          ) : (
+                            <>
+                              Get directions <ChevronDown className="w-3.5 h-3.5" />
+                            </>
+                          )}
+                        </Button>
+                        {mapsUrl && (
+                          <a href={mapsUrl} target="_blank" rel="noreferrer">
+                            <Button type="button" size="sm" className="gap-2">
+                              <ExternalLink className="w-4 h-4" />
+                              Open in Maps
+                            </Button>
+                          </a>
+                        )}
+                      </div>
+
+                      {showHubDirections[hub._id] && hub.lat != null && hub.lng != null && (
+                        <div className="mt-4 pt-4 border-t border-border">
+                          <GoogleMapDirections
+                            destination={{ lat: hub.lat, lng: hub.lng, address: hub.address }}
+                            originFallback={user?.location}
+                            height={240}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
@@ -592,6 +831,17 @@ export default function LocalCollectorDashboard() {
           </div>
         )}
       </main>
+
+      {/* In-app camera for collection proof */}
+      <CameraCapture
+        open={!!cameraForAssignment}
+        onClose={() => setCameraForAssignment(null)}
+        onCapture={(dataUrl) => {
+          setPhotoByAssignment((prev) => ({ ...prev, [cameraForAssignment]: dataUrl }));
+          setCameraForAssignment(null);
+        }}
+        title="Photo of collected e-waste"
+      />
 
       {/* Deliver to Hub Dialog */}
       <Dialog open={deliveryDialog} onOpenChange={setDeliveryDialog}>

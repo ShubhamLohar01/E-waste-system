@@ -1,0 +1,302 @@
+[
+  {
+    "_id": "1776500184677-hmzoia37v",
+    "recyclerId": "1776500183470-uv3l6619d",
+    "category": "Laptops",
+    "quantityNeeded": 50,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-nv8eb31xp",
+    "recyclerId": "1776500183470-uv3l6619d",
+    "category": "Mobile Phones",
+    "quantityNeeded": 80,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-aowtr7sig",
+    "recyclerId": "1776500183554-cof39qun1",
+    "category": "Mobile Phones",
+    "quantityNeeded": 50,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-3gnjlw4bu",
+    "recyclerId": "1776500183554-cof39qun1",
+    "category": "Cables",
+    "quantityNeeded": 80,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-4usl6z597",
+    "recyclerId": "1776500183644-a0jx6p84b",
+    "category": "Cables",
+    "quantityNeeded": 50,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-hinzx28kx",
+    "recyclerId": "1776500183644-a0jx6p84b",
+    "category": "Monitors",
+    "quantityNeeded": 80,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-t3vff2y5z",
+    "recyclerId": "1776500183738-gyrj92bje",
+    "category": "Monitors",
+    "quantityNeeded": 50,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-a2z2k8260",
+    "recyclerId": "1776500183738-gyrj92bje",
+    "category": "Batteries",
+    "quantityNeeded": 80,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-td90vst3j",
+    "recyclerId": "1776500183824-bb3tkdnhc",
+    "category": "Batteries",
+    "quantityNeeded": 50,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-rmostvmw5",
+    "recyclerId": "1776500183824-bb3tkdnhc",
+    "category": "Laptops",
+    "quantityNeeded": 80,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-e6464zp7h",
+    "recyclerId": "1776500183908-q81cfvcqq",
+    "category": "Laptops",
+    "quantityNeeded": 50,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-emavgsetg",
+    "recyclerId": "1776500183908-q81cfvcqq",
+    "category": "Mobile Phones",
+    "quantityNeeded": 80,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-qmqvz58le",
+    "recyclerId": "1776500184093-dm5r6sxyz",
+    "category": "Mobile Phones",
+    "quantityNeeded": 50,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-vr29hs14m",
+    "recyclerId": "1776500184093-dm5r6sxyz",
+    "category": "Cables",
+    "quantityNeeded": 80,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-j2k1xitgu",
+    "recyclerId": "1776500184362-7tf2cc5vo",
+    "category": "Cables",
+    "quantityNeeded": 50,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-89m4wk8du",
+    "recyclerId": "1776500184362-7tf2cc5vo",
+    "category": "Monitors",
+    "quantityNeeded": 80,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-f8gkv39vk",
+    "recyclerId": "1776500184520-iao0cx3k0",
+    "category": "Monitors",
+    "quantityNeeded": 50,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-ah79zlton",
+    "recyclerId": "1776500184520-iao0cx3k0",
+    "category": "Batteries",
+    "quantityNeeded": 80,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-3t5w572fc",
+    "recyclerId": "1776500184677-dvyul32ej",
+    "category": "Batteries",
+    "quantityNeeded": 50,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  },
+  {
+    "_id": "1776500184677-6n4780glu",
+    "recyclerId": "1776500184677-dvyul32ej",
+    "category": "Laptops",
+    "quantityNeeded": 80,
+    "unit": "pieces",
+    "deliveryWindow": {
+      "start": "2026-04-18T08:16:24.677Z",
+      "end": "2026-05-02T08:16:24.677Z"
+    },
+    "status": "open",
+    "matchedInventory": [],
+    "createdAt": "2026-04-18T08:16:24.677Z",
+    "updatedAt": "2026-04-18T08:16:24.677Z"
+  }
+]

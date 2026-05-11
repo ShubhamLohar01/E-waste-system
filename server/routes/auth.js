@@ -13,8 +13,16 @@ import {
   sendVerificationEmail,
 } from '../utils/verification';
 import { rewards } from '../models/Reward';
+import { rateLimit } from '../middleware/rateLimit.js';
+import { validate, registerSchema, registerWithEmailSchema, profileUpdateSchema, PUBLIC_ROLES } from '../schemas.js';
 
 const router = Router();
+
+// Shared rate limiters
+const loginLimiter = rateLimit({ windowMs: 15 * 60_000, max: 8 });
+const otpSendLimiter = rateLimit({ windowMs: 60 * 60_000, max: 5, keyOn: 'email' });
+const otpVerifyLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, keyOn: 'email' });
+const registerLimiter = rateLimit({ windowMs: 60 * 60_000, max: 10 });
 
 const trustLevelMap = {
   small_user: 'low',
@@ -30,7 +38,7 @@ const trustLevelMap = {
  * POST /api/auth/send-email-code
  * Send verification code to email (Gmail); code is emailed or logged in dev
  */
-router.post('/send-email-code', async (req, res) => {
+router.post('/send-email-code', otpSendLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || typeof email !== 'string') {
@@ -51,7 +59,7 @@ router.post('/send-email-code', async (req, res) => {
  * POST /api/auth/verify-email-code
  * Verify email code and return token+user if existing user, else needsRegister + verifyToken
  */
-router.post('/verify-email-code', async (req, res) => {
+router.post('/verify-email-code', otpVerifyLimiter, async (req, res) => {
   try {
     const { email, code } = req.body;
     if (!email || !code) {
@@ -96,15 +104,9 @@ router.post('/verify-email-code', async (req, res) => {
  * POST /api/auth/register-with-email
  * Register after email code verified; requires verifyToken from verify-email-code
  */
-router.post('/register-with-email', async (req, res) => {
+router.post('/register-with-email', registerLimiter, validate(registerWithEmailSchema), async (req, res) => {
   try {
     const { verifyToken, name, role, address } = req.body;
-    if (!verifyToken || !name || !role) {
-      return res.status(400).json({ error: 'verifyToken, name and role required' });
-    }
-    if (!address || typeof address !== 'string' || !address.trim()) {
-      return res.status(400).json({ error: 'Address is required' });
-    }
     const payload = verifyVerificationToken(verifyToken);
     if (!payload || payload.purpose !== 'email_register' || !payload.email) {
       return res.status(400).json({ error: 'Invalid or expired verification' });
@@ -173,17 +175,17 @@ router.post('/register-with-email', async (req, res) => {
  * POST /api/auth/register
  * Register a new user
  */
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, validate(registerSchema), async (req, res) => {
   try {
     const { name, email, password, phone, role, location } = req.body;
 
-    // Validate input
-    if (!name || !email || !password || !phone || !role) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    // Defense in depth — zod already enforces this, but belt-and-braces:
+    if (!PUBLIC_ROLES.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Admin accounts cannot be created via registration.' });
     }
 
-    // Check if user already exists
-    if (users.find(u => u.email === email)) {
+    // Check if user already exists (case-insensitive)
+    if (users.find((u) => u.email.toLowerCase() === email.toLowerCase())) {
       return res.status(409).json({ error: 'User already exists' });
     }
 
@@ -253,7 +255,7 @@ router.post('/register', async (req, res) => {
  * POST /api/auth/login
  * Login user and return JWT
  */
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -261,7 +263,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
-    const user = users.find(u => u.email === email);
+    const user = users.find((u) => u.email.toLowerCase() === String(email).toLowerCase());
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -405,22 +407,30 @@ router.get('/me', verifyAuth, (req, res) => {
 });
 
 /**
- * PUT /api/auth/profile
- * Update user profile
+ * POST /api/auth/logout
+ * Stateless logout — client drops the token. Returned for symmetry with /login.
  */
-router.put('/profile', verifyAuth, async (req, res) => {
+router.post('/logout', verifyAuth, (_req, res) => {
+  res.json({ message: 'Logged out' });
+});
+
+/**
+ * PUT /api/auth/profile
+ * Update user profile (validated)
+ */
+router.put('/profile', verifyAuth, validate(profileUpdateSchema), async (req, res) => {
   try {
-    const user = users.find(u => u._id === req.user?.id);
+    const user = users.find((u) => u._id === req.user?.id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     const { name, phone, location } = req.body;
 
-    if (name) user.name = name;
-    if (phone) user.phone = phone;
-    if (location) user.location = location;
-    user.updatedAt = new Date();
+    if (name != null) user.name = name;
+    if (phone != null) user.phone = phone;
+    if (location != null) user.location = { ...(user.location || {}), ...location };
+    user.updatedAt = new Date().toISOString();
 
     res.json({
       message: 'Profile updated successfully',

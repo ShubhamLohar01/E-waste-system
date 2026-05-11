@@ -198,11 +198,22 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  const logout = () => {
-    localStorage.removeItem('auth_token');
-    setUser(null);
-    setToken(null);
-    setError(null);
+  const logout = async () => {
+    try {
+      const t = localStorage.getItem('auth_token');
+      if (t) {
+        // Best-effort notify server; failure is fine — client-side state is source of truth for logout
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${t}` },
+        }).catch(() => {});
+      }
+    } finally {
+      localStorage.removeItem('auth_token');
+      setUser(null);
+      setToken(null);
+      setError(null);
+    }
   };
 
   return (

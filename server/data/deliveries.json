@@ -1,0 +1,548 @@
+[
+  {
+    "_id": "1776500184680-wessbq8lt",
+    "deliveryWorkerId": "1776500182569-t1pmvy6hx",
+    "pickupHub": "1776500182006-a8ytghwai",
+    "dropoffRecycler": "1776500183554-cof39qun1",
+    "manifest": [
+      {
+        "inventoryId": "1776500184680-y0lknxomz",
+        "qrCode": "INV.1776500184680-y0lknxomz.1776500184680.71efd224c2da",
+        "category": "Monitors",
+        "qty": 3,
+        "unit": "pieces",
+        "weightKg": 15
+      }
+    ],
+    "status": "picked_up",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-07T20:16:24.680Z"
+    },
+    "dropoffProof": {
+      "qrScanned": false
+    },
+    "createdAt": "2026-04-07T14:16:24.680Z",
+    "updatedAt": "2026-04-07T20:16:24.680Z"
+  },
+  {
+    "_id": "1776500184680-cgjucbnwv",
+    "deliveryWorkerId": "1776500182843-697ixiuvz",
+    "pickupHub": "1776500182468-mb8j97i3j",
+    "dropoffRecycler": "1776500183644-a0jx6p84b",
+    "manifest": [
+      {
+        "inventoryId": "1776500184680-5lag9caso",
+        "qrCode": "INV.1776500184680-5lag9caso.1776500184680.a5f60106f78a",
+        "category": "Old Laptops",
+        "qty": 4,
+        "unit": "pieces",
+        "weightKg": 12
+      }
+    ],
+    "status": "picked_up",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-06T20:16:24.680Z"
+    },
+    "dropoffProof": {
+      "qrScanned": false
+    },
+    "createdAt": "2026-04-06T14:16:24.680Z",
+    "updatedAt": "2026-04-06T20:16:24.680Z"
+  },
+  {
+    "_id": "1776500184680-yl1bynl1b",
+    "deliveryWorkerId": "1776500182659-m8ix39t8t",
+    "pickupHub": "1776500182184-slkwmt4p7",
+    "dropoffRecycler": "1776500184093-dm5r6sxyz",
+    "manifest": [
+      {
+        "inventoryId": "1776500184680-xi9mbipi2",
+        "qrCode": "INV.1776500184680-xi9mbipi2.1776500184680.f2734cda5693",
+        "category": "Mobile Phones",
+        "qty": 20,
+        "unit": "pieces",
+        "weightKg": 4
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-03T20:16:24.680Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-04T08:16:24.680Z"
+    },
+    "createdAt": "2026-04-03T14:16:24.680Z",
+    "updatedAt": "2026-04-04T08:16:24.680Z"
+  },
+  {
+    "_id": "1776500184680-fl13xkcvc",
+    "deliveryWorkerId": "1776500183034-hv5dh8lj1",
+    "pickupHub": "1776500182273-qv7lqppb0",
+    "dropoffRecycler": "1776500183824-bb3tkdnhc",
+    "manifest": [
+      {
+        "inventoryId": "1776500184680-t1l50ge9t",
+        "qrCode": "INV.1776500184680-t1l50ge9t.1776500184680.da507998b17f",
+        "category": "Electronic Cables",
+        "qty": 8,
+        "unit": "kg",
+        "weightKg": 8
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-01T20:16:24.680Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-02T08:16:24.680Z"
+    },
+    "createdAt": "2026-04-01T14:16:24.680Z",
+    "updatedAt": "2026-04-02T08:16:24.680Z"
+  },
+  {
+    "_id": "1776500184680-rkqzeth2i",
+    "deliveryWorkerId": "1776500182753-44imcp81b",
+    "pickupHub": "1776500182098-0na3w1uqo",
+    "dropoffRecycler": "1776500184362-7tf2cc5vo",
+    "manifest": [
+      {
+        "inventoryId": "1776500184680-th8vmyev6",
+        "qrCode": "INV.1776500184680-th8vmyev6.1776500184680.267e238b9251",
+        "category": "Batteries",
+        "qty": 25,
+        "unit": "pieces",
+        "weightKg": 10
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-29T20:16:24.680Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-30T08:16:24.680Z"
+    },
+    "createdAt": "2026-03-29T14:16:24.680Z",
+    "updatedAt": "2026-03-30T08:16:24.680Z"
+  },
+  {
+    "_id": "1776500184680-41vqpxotk",
+    "deliveryWorkerId": "1776500182569-t1pmvy6hx",
+    "pickupHub": "1776500182006-a8ytghwai",
+    "dropoffRecycler": "1776500183470-uv3l6619d",
+    "manifest": [
+      {
+        "inventoryId": "1776500184680-eeinnc4zv",
+        "qrCode": "INV.1776500184680-eeinnc4zv.1776500184680.1e9c48e329fb",
+        "category": "Old Laptops",
+        "qty": 5,
+        "unit": "pieces",
+        "weightKg": 15
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-26T20:16:24.680Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-27T08:16:24.680Z"
+    },
+    "createdAt": "2026-03-26T14:16:24.680Z",
+    "updatedAt": "2026-03-27T08:16:24.680Z"
+  },
+  {
+    "_id": "1776500184681-lvknkndqn",
+    "deliveryWorkerId": "1776500182941-jo15ao1n1",
+    "pickupHub": "1776500182363-tpx77ompt",
+    "dropoffRecycler": "1776500184520-iao0cx3k0",
+    "manifest": [
+      {
+        "inventoryId": "1776500184681-3q8k9337k",
+        "qrCode": "INV.1776500184681-3q8k9337k.1776500184681.76b6f50fecac",
+        "category": "Monitors",
+        "qty": 3,
+        "unit": "pieces",
+        "weightKg": 18
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-23T20:16:24.681Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-24T08:16:24.681Z"
+    },
+    "createdAt": "2026-03-23T14:16:24.681Z",
+    "updatedAt": "2026-03-24T08:16:24.681Z"
+  },
+  {
+    "_id": "1776500184681-q1ecfdstl",
+    "deliveryWorkerId": "1776500183121-oeu7w706g",
+    "pickupHub": "1776500182184-slkwmt4p7",
+    "dropoffRecycler": "1776500184677-dvyul32ej",
+    "manifest": [
+      {
+        "inventoryId": "1776500184681-hmc9cedmd",
+        "qrCode": "INV.1776500184681-hmc9cedmd.1776500184681.81820bfbe4df",
+        "category": "Electronic Cables",
+        "qty": 10,
+        "unit": "kg",
+        "weightKg": 10
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-21T20:16:24.681Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-22T08:16:24.681Z"
+    },
+    "createdAt": "2026-03-21T14:16:24.681Z",
+    "updatedAt": "2026-03-22T08:16:24.681Z"
+  },
+  {
+    "_id": "1776500184681-kdvmaavk1",
+    "deliveryWorkerId": "1776500183205-ygymkvygz",
+    "pickupHub": "1776500182468-mb8j97i3j",
+    "dropoffRecycler": "1776500183554-cof39qun1",
+    "manifest": [
+      {
+        "inventoryId": "1776500184681-874ua0cju",
+        "qrCode": "INV.1776500184681-874ua0cju.1776500184681.5ce2d4fcc793",
+        "category": "Keyboards & Mouse",
+        "qty": 8,
+        "unit": "pieces",
+        "weightKg": 4
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-18T20:16:24.681Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-19T08:16:24.681Z"
+    },
+    "createdAt": "2026-03-18T14:16:24.681Z",
+    "updatedAt": "2026-03-19T08:16:24.681Z"
+  },
+  {
+    "_id": "1776500184681-ttc11hts1",
+    "deliveryWorkerId": "1776500182659-m8ix39t8t",
+    "pickupHub": "1776500182273-qv7lqppb0",
+    "dropoffRecycler": "1776500183644-a0jx6p84b",
+    "manifest": [
+      {
+        "inventoryId": "1776500184681-qph5adzyt",
+        "qrCode": "INV.1776500184681-qph5adzyt.1776500184681.73d30b17e087",
+        "category": "Circuit Boards",
+        "qty": 4,
+        "unit": "pieces",
+        "weightKg": 5
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-14T20:16:24.681Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-15T08:16:24.681Z"
+    },
+    "createdAt": "2026-03-14T14:16:24.681Z",
+    "updatedAt": "2026-03-15T08:16:24.681Z"
+  },
+  {
+    "_id": "1776500184681-n32gaw8t3",
+    "deliveryWorkerId": "1776500182753-44imcp81b",
+    "pickupHub": "1776500182363-tpx77ompt",
+    "dropoffRecycler": "1776500183470-uv3l6619d",
+    "manifest": [
+      {
+        "inventoryId": "1776500184681-z1t4af3l1",
+        "qrCode": "INV.1776500184681-z1t4af3l1.1776500184681.f6cdc95ecf73",
+        "category": "Batteries",
+        "qty": 30,
+        "unit": "pieces",
+        "weightKg": 12
+      }
+    ],
+    "status": "picked_up",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-18T08:16:24.681Z"
+    },
+    "dropoffProof": {
+      "qrScanned": false
+    },
+    "createdAt": "2026-04-18T02:16:24.681Z",
+    "updatedAt": "2026-04-18T08:16:24.681Z"
+  },
+  {
+    "_id": "1776500184681-vbleugvub",
+    "deliveryWorkerId": "1776500183121-oeu7w706g",
+    "pickupHub": "1776500182468-mb8j97i3j",
+    "dropoffRecycler": "1776500183470-uv3l6619d",
+    "manifest": [
+      {
+        "inventoryId": "1776500184681-bw6w2xuio",
+        "qrCode": "INV.1776500184681-bw6w2xuio.1776500184681.3b5a85e6c981",
+        "category": "Old Laptops",
+        "qty": 6,
+        "unit": "pieces",
+        "weightKg": 18
+      }
+    ],
+    "status": "picked_up",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-17T15:28:24.681Z"
+    },
+    "dropoffProof": {
+      "qrScanned": false
+    },
+    "createdAt": "2026-04-17T09:28:24.681Z",
+    "updatedAt": "2026-04-17T15:28:24.681Z"
+  },
+  {
+    "_id": "1776500184681-jicvmzci1",
+    "deliveryWorkerId": "1776500182843-697ixiuvz",
+    "pickupHub": "1776500182006-a8ytghwai",
+    "dropoffRecycler": "1776500183470-uv3l6619d",
+    "manifest": [
+      {
+        "inventoryId": "1776500184681-007u4ynj7",
+        "qrCode": "INV.1776500184681-007u4ynj7.1776500184681.660b96ab4e29",
+        "category": "Mobile Phones",
+        "qty": 25,
+        "unit": "pieces",
+        "weightKg": 5
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-14T20:16:24.681Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-15T08:16:24.681Z"
+    },
+    "createdAt": "2026-04-14T14:16:24.681Z",
+    "updatedAt": "2026-04-15T08:16:24.681Z"
+  },
+  {
+    "_id": "1776500184681-zmdvaonmk",
+    "deliveryWorkerId": "1776500183034-hv5dh8lj1",
+    "pickupHub": "1776500182098-0na3w1uqo",
+    "dropoffRecycler": "1776500183470-uv3l6619d",
+    "manifest": [
+      {
+        "inventoryId": "1776500184681-j5hct2pur",
+        "qrCode": "INV.1776500184681-j5hct2pur.1776500184681.d0a061ba59b6",
+        "category": "Monitors",
+        "qty": 4,
+        "unit": "pieces",
+        "weightKg": 20
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-12T20:16:24.681Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-13T08:16:24.681Z"
+    },
+    "createdAt": "2026-04-12T14:16:24.681Z",
+    "updatedAt": "2026-04-13T08:16:24.681Z"
+  },
+  {
+    "_id": "1776500184681-ujo3vo7ld",
+    "deliveryWorkerId": "1776500183205-ygymkvygz",
+    "pickupHub": "1776500182184-slkwmt4p7",
+    "dropoffRecycler": "1776500183470-uv3l6619d",
+    "manifest": [
+      {
+        "inventoryId": "1776500184681-htsg8us6c",
+        "qrCode": "INV.1776500184681-htsg8us6c.1776500184681.b8907e2f8dc6",
+        "category": "Electronic Cables",
+        "qty": 12,
+        "unit": "kg",
+        "weightKg": 12
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-10T20:16:24.681Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-11T08:16:24.681Z"
+    },
+    "createdAt": "2026-04-10T14:16:24.681Z",
+    "updatedAt": "2026-04-11T08:16:24.681Z"
+  },
+  {
+    "_id": "1776500184682-x6d0tkqm0",
+    "deliveryWorkerId": "1776500183292-x9zxadlr2",
+    "pickupHub": "1776500182273-qv7lqppb0",
+    "dropoffRecycler": "1776500183470-uv3l6619d",
+    "manifest": [
+      {
+        "inventoryId": "1776500184682-gclh4wjms",
+        "qrCode": "INV.1776500184682-gclh4wjms.1776500184682.08f4697916c4",
+        "category": "Keyboards & Mouse",
+        "qty": 15,
+        "unit": "pieces",
+        "weightKg": 7
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-05T20:16:24.682Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-06T08:16:24.682Z"
+    },
+    "createdAt": "2026-04-05T14:16:24.682Z",
+    "updatedAt": "2026-04-06T08:16:24.682Z"
+  },
+  {
+    "_id": "1776500184682-68axm994j",
+    "deliveryWorkerId": "1776500183384-1xq3qgjms",
+    "pickupHub": "1776500182363-tpx77ompt",
+    "dropoffRecycler": "1776500183470-uv3l6619d",
+    "manifest": [
+      {
+        "inventoryId": "1776500184682-wrd30duco",
+        "qrCode": "INV.1776500184682-wrd30duco.1776500184682.1237dc2b9a15",
+        "category": "Printers",
+        "qty": 3,
+        "unit": "pieces",
+        "weightKg": 18
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-01T20:16:24.682Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-04-02T08:16:24.682Z"
+    },
+    "createdAt": "2026-04-01T14:16:24.682Z",
+    "updatedAt": "2026-04-02T08:16:24.682Z"
+  },
+  {
+    "_id": "1776500184682-yk684jdnz",
+    "deliveryWorkerId": "1776500182753-44imcp81b",
+    "pickupHub": "1776500182468-mb8j97i3j",
+    "dropoffRecycler": "1776500183470-uv3l6619d",
+    "manifest": [
+      {
+        "inventoryId": "1776500184682-qvutmj4a1",
+        "qrCode": "INV.1776500184682-qvutmj4a1.1776500184682.f43fc134f8fd",
+        "category": "Circuit Boards",
+        "qty": 8,
+        "unit": "pieces",
+        "weightKg": 5
+      }
+    ],
+    "status": "delivered",
+    "pickupProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-26T20:16:24.682Z"
+    },
+    "dropoffProof": {
+      "qrScanned": true,
+      "scannedCount": 1,
+      "photo": "",
+      "timestamp": "2026-03-27T08:16:24.682Z"
+    },
+    "createdAt": "2026-03-26T14:16:24.682Z",
+    "updatedAt": "2026-03-27T08:16:24.682Z"
+  }
+]

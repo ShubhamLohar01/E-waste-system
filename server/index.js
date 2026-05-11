@@ -10,49 +10,42 @@ import demandRoutes from "./routes/demand";
 import deliveryRoutes from "./routes/delivery";
 import bulkRoutes from "./routes/bulk";
 import adminRoutes from "./routes/admin";
-import { seedDatabase } from "./seed";
+import recyclerRoutes from "./routes/recycler.js";
+import notificationRoutes from "./routes/notifications.js";
+import rewardRoutes from "./routes/rewards.js";
+import disputesRoutes from "./routes/disputes.js";
+import { seedDatabase } from "./seed.js";
+import { persistAll } from "./middleware/persistAll.js";
 
 export async function createServer() {
-  // Seed database on startup
+  // Seed JSON store if empty
   await seedDatabase();
+
   const app = express();
-
-  // Middleware
   app.use(cors());
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-  // Example API routes
+  // Flush all collections to JSON after every mutating request
+  app.use(persistAll);
+
   app.get("/api/ping", (_req, res) => {
-    const ping = process.env.PING_MESSAGE ?? "ping";
-    res.json({ message: ping });
+    res.json({ message: process.env.PING_MESSAGE ?? "ping" });
   });
-
   app.get("/api/demo", handleDemo);
 
-  // Auth routes
   app.use("/api/auth", authRoutes);
-
-  // Small User routes
   app.use("/api/intent", intentRoutes);
-
-  // Hub routes
   app.use("/api/hub", hubRoutes);
-
-  // Collector routes
   app.use("/api/collector", collectorRoutes);
-
-  // Demand & Recycler routes
   app.use("/api/demand", demandRoutes);
-
-  // Delivery routes
   app.use("/api/delivery", deliveryRoutes);
-
-  // Bulk generator routes
   app.use("/api/bulk", bulkRoutes);
-
-  // Admin routes
   app.use("/api/admin", adminRoutes);
+  app.use("/api/recycler", recyclerRoutes);
+  app.use("/api/notifications", notificationRoutes);
+  app.use("/api/rewards", rewardRoutes);
+  app.use("/api/disputes", disputesRoutes);
 
   return app;
 }

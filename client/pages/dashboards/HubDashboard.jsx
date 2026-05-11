@@ -20,6 +20,11 @@ import {
   Eye,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import NotificationsBell from "@/components/NotificationsBell";
+import QRSticker from "@/components/QRSticker";
+import { api } from "@/lib/api";
+import { Coins } from "lucide-react";
+import RaiseDisputeDialog from "@/components/RaiseDisputeDialog";
 
 const CONDITIONS = ["excellent", "good", "fair", "damaged"];
 
@@ -29,14 +34,17 @@ export default function HubDashboard() {
   const [activeTab, setActiveTab] = useState("incoming");
   const [incomingItems, setIncomingItems] = useState([]);
   const [verifiedItems, setVerifiedItems] = useState([]);
+  const [rewardPoints, setRewardPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
 
   const [verifyDialog, setVerifyDialog] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [verifyQty, setVerifyQty] = useState(0);
+  const [verifyWeight, setVerifyWeight] = useState("");
   const [verifyCondition, setVerifyCondition] = useState("good");
   const [verifyCategory, setVerifyCategory] = useState("");
+  const [lastSticker, setLastSticker] = useState(null);
   const [flagDialog, setFlagDialog] = useState(false);
   const [flagReason, setFlagReason] = useState("");
 
@@ -69,6 +77,10 @@ export default function HubDashboard() {
         const data = await invRes.json();
         setVerifiedItems(data.verifiedItems || []);
       }
+      try {
+        const rw = await api.get("/api/rewards/mine");
+        setRewardPoints(rw?.totalPoints ?? 0);
+      } catch { /* ignore */ }
     } catch (err) {
       console.error("Failed to fetch data:", err);
     }
@@ -86,8 +98,10 @@ export default function HubDashboard() {
   const openVerifyDialog = (item) => {
     setSelectedItem(item);
     setVerifyQty(item.actualQty);
+    setVerifyWeight(item.weightKg != null ? String(item.weightKg) : "");
     setVerifyCondition(item.condition || "good");
     setVerifyCategory(item.category);
+    setLastSticker(null);
     setVerifyDialog(true);
   };
 
@@ -100,14 +114,15 @@ export default function HubDashboard() {
         body: JSON.stringify({
           inventoryId: selectedItem._id,
           actualQty: verifyQty,
+          weightKg: verifyWeight === "" ? null : Number(verifyWeight),
           condition: verifyCondition,
           category: verifyCategory,
         }),
       });
 
       if (res.ok) {
-        setVerifyDialog(false);
-        setSelectedItem(null);
+        const data = await res.json();
+        setLastSticker(data.sticker || null);
         await fetchData();
       } else {
         const data = await res.json();
@@ -153,8 +168,8 @@ export default function HubDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 
@@ -190,8 +205,19 @@ export default function HubDashboard() {
                 <span className="font-bold text-foreground">E-Waste Hub</span>
               </Link>
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground hidden sm:block">{user?.name}</span>
+            <div className="flex items-center gap-3">
+              <NotificationsBell />
+              <span
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-sm font-medium"
+                title="Your reward points"
+              >
+                <Coins className="w-4 h-4" />
+                {Math.round(rewardPoints)} pts
+              </span>
+              <Link to="/profile">
+                <Button variant="outline" size="sm" className="hidden sm:inline-flex">Profile</Button>
+              </Link>
+              <span className="text-sm text-muted-foreground hidden md:inline">{user?.name}</span>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
@@ -329,7 +355,7 @@ export default function HubDashboard() {
                     </div>
                   )}
 
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 flex-wrap">
                     <Button onClick={() => openVerifyDialog(item)} className="gap-2">
                       <CheckCircle2 className="w-4 h-4" />
                       Verify Item
@@ -338,6 +364,11 @@ export default function HubDashboard() {
                       <AlertTriangle className="w-4 h-4" />
                       Flag Issue
                     </Button>
+                    <RaiseDisputeDialog
+                      relatedInventoryId={item._id}
+                      againstUserId={item.collectorId}
+                      triggerLabel="Dispute w/ collector"
+                    />
                   </div>
                 </div>
               ))
@@ -409,7 +440,7 @@ export default function HubDashboard() {
                 <p className="text-xs text-muted-foreground mt-1">QR: {selectedItem.qrCode}</p>
               </div>
 
-              <div className="grid sm:grid-cols-3 gap-4">
+              <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">Actual Quantity</label>
                   <input
@@ -417,6 +448,18 @@ export default function HubDashboard() {
                     min="0"
                     value={verifyQty}
                     onChange={(e) => setVerifyQty(parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Weight (kg)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={verifyWeight}
+                    onChange={(e) => setVerifyWeight(e.target.value)}
+                    placeholder="e.g. 4.5"
                     className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none"
                   />
                 </div>
@@ -443,18 +486,37 @@ export default function HubDashboard() {
                 </div>
               </div>
 
-              <Button
-                onClick={handleVerify}
-                disabled={actionLoading === selectedItem._id}
-                className="w-full gap-2"
-              >
-                {actionLoading === selectedItem._id ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="w-4 h-4" />
-                )}
-                Confirm Verification
-              </Button>
+              {lastSticker ? (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-green-700 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" /> Verified! Print the sticker and stick it on the item.
+                  </p>
+                  <QRSticker
+                    qrCode={lastSticker.qrCode}
+                    category={lastSticker.category}
+                    qty={lastSticker.actualQty}
+                    unit={lastSticker.unit}
+                    weightKg={lastSticker.weightKg}
+                    hubName={lastSticker.hubName}
+                  />
+                  <Button variant="outline" onClick={() => { setVerifyDialog(false); setSelectedItem(null); setLastSticker(null); }} className="w-full">
+                    Close
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  onClick={handleVerify}
+                  disabled={actionLoading === selectedItem._id}
+                  className="w-full gap-2"
+                >
+                  {actionLoading === selectedItem._id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4" />
+                  )}
+                  Confirm Verification &amp; Generate QR Sticker
+                </Button>
+              )}
             </div>
           )}
         </DialogContent>

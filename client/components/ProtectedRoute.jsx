@@ -19,6 +19,7 @@ export function ProtectedRoute({ children, requiredRole }) {
     return <Navigate to="/login" replace />;
   }
 
+  // If a role is required, enforce it. No role means "any authenticated user".
   if (requiredRole && user?.role !== requiredRole) {
     return <Navigate to="/" replace />;
   }

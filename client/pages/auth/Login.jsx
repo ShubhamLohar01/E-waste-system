@@ -14,6 +14,7 @@ export default function Login() {
   const [gmailEmail, setGmailEmail] = useState('');
   const [emailCode, setEmailCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingDemoEmail, setLoadingDemoEmail] = useState(null);
   const [error, setError] = useState('');
   const [emailCodeSent, setEmailCodeSent] = useState(false);
   const { login, loginWithGoogle, sendEmailCode, verifyEmailCode } = useAuth();
@@ -43,6 +44,24 @@ export default function Login() {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // One-click demo login: fill the form AND sign in immediately.
+  // This avoids the fill → click sequence where browser autofill can overwrite
+  // the password field between clicks.
+  const handleDemoLogin = async (demoEmail, demoPassword) => {
+    setError('');
+    setEmail(demoEmail);
+    setPassword(demoPassword);
+    setLoadingDemoEmail(demoEmail);
+    try {
+      const userData = await login(demoEmail, demoPassword);
+      navigate(getDashboardPath(userData.role));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Demo login failed');
+    } finally {
+      setLoadingDemoEmail(null);
     }
   };
 
@@ -102,15 +121,97 @@ export default function Login() {
     }
   };
 
-  const demoCredentials = [
-    { email: 'admin@ewaste.com', password: 'admin123', role: 'Admin' },
-    { email: 'user1@ewaste.com', password: 'user123', role: 'Small User' },
-    { email: 'collector1@ewaste.com', password: 'collector123', role: 'Collector' },
-    { email: 'hub1@ewaste.com', password: 'hub123', role: 'Hub' },
-    { email: 'delivery1@ewaste.com', password: 'delivery123', role: 'Delivery Worker' },
-    { email: 'recycler1@ewaste.com', password: 'recycler123', role: 'Recycler' },
-    { email: 'bulk1@ewaste.com', password: 'bulk123', role: 'Bulk Generator' },
+  // Full seeded roster — matches server/seed.js. Click any row to prefill the form.
+  const demoCredentialGroups = [
+    {
+      role: 'Admin',
+      password: 'admin123',
+      defaultOpen: true,
+      accounts: [
+        { name: 'Rohit Ritthe', email: 'rohit.ritthe@ewaste.com', tag: 'admin' },
+      ],
+    },
+    {
+      role: 'Small users',
+      password: 'user123',
+      accounts: [
+        { name: 'Hrithik Sharma',   email: 'hrithik@ewaste.com',         tag: 'Kothrud' },
+        { name: 'Kaushal Patil',    email: 'kaushal@ewaste.com',         tag: 'Viman Nagar' },
+        { name: 'Tejas Shinde',     email: 'tejas.shinde@ewaste.com',    tag: 'Karve Nagar' },
+        { name: 'Suraj Salunkhe',   email: 'suraj.salunkhe@ewaste.com',  tag: 'Sinhagad Rd' },
+        { name: 'Shubham Lohar',    email: 'shubham.lohar@ewaste.com',   tag: 'Hinjewadi' },
+        { name: 'Anita Kulkarni',   email: 'anita.kulkarni@ewaste.com',  tag: 'Sadashiv Peth' },
+        { name: 'Rahul Joshi',      email: 'rahul.joshi@ewaste.com',     tag: 'Kalyani Nagar' },
+        { name: 'Pooja Desai',      email: 'pooja.desai@ewaste.com',     tag: 'Shivaji Nagar' },
+        { name: 'Nikhil Mehta',     email: 'nikhil.mehta@ewaste.com',    tag: 'Hadapsar' },
+        { name: 'Snehal Rao',       email: 'snehal.rao@ewaste.com',      tag: 'Balewadi' },
+        { name: 'Ajay Bhosale',     email: 'ajay.bhosale@ewaste.com',    tag: 'Parvati' },
+        { name: 'Isha Nair',        email: 'isha.nair@ewaste.com',       tag: 'Bavdhan' },
+      ],
+    },
+    {
+      role: 'Local collectors',
+      password: 'collector123',
+      accounts: [
+        { name: 'Sahil Wankhede',   email: 'sahil.wankhede@ewaste.com',  tag: 'Deccan Gymkhana' },
+        { name: 'Rohan Pawar',      email: 'rohan.pawar@ewaste.com',     tag: 'Baner' },
+        { name: 'Aniket Jagtap',    email: 'aniket.jagtap@ewaste.com',   tag: 'Warje Chowk' },
+        { name: 'Prasad More',      email: 'prasad.more@ewaste.com',     tag: 'Vishrantwadi' },
+        { name: 'Sandeep Ghule',    email: 'sandeep.ghule@ewaste.com',   tag: 'Fursungi' },
+        { name: 'Omkar Bagal',      email: 'omkar.bagal@ewaste.com',     tag: 'Pashan' },
+        { name: 'Vishal Mohite',    email: 'vishal.mohite@ewaste.com',   tag: 'Bibwewadi' },
+        { name: 'Mayur Sonar',      email: 'mayur.sonar@ewaste.com',     tag: 'Yerawada' },
+        { name: 'Kiran Borade',     email: 'kiran.borade@ewaste.com',    tag: 'Wakad' },
+        { name: 'Tushar Sawant',    email: 'tushar.sawant@ewaste.com',   tag: 'Dhankawadi' },
+      ],
+    },
+    {
+      role: 'Hubs',
+      password: 'hub123',
+      accounts: [
+        { name: 'Vedant Rane (Hub A)',      email: 'vedant.rane@ewaste.com',      tag: 'Koregaon Park' },
+        { name: 'Vipul Ware (Hub B)',       email: 'vipul.ware@ewaste.com',       tag: 'Warje' },
+        { name: 'Aditya Joshi (Hub C)',     email: 'aditya.joshi@ewaste.com',     tag: 'Hinjewadi' },
+        { name: 'Neha Deshmukh (Hub D)',    email: 'neha.deshmukh@ewaste.com',    tag: 'Kharadi' },
+        { name: 'Amol Gaikwad (Hub E)',     email: 'amol.gaikwad@ewaste.com',     tag: 'Aundh' },
+        { name: 'Siddharth Kamble (Hub F)', email: 'siddharth.kamble@ewaste.com', tag: 'Hadapsar' },
+      ],
+    },
+    {
+      role: 'Delivery agents',
+      password: 'delivery123',
+      accounts: [
+        { name: 'Ajit Mane',        email: 'ajit.mane@ewaste.com',        tag: 'Camp / MG Rd' },
+        { name: 'Prathamesh Kale',  email: 'prathamesh.kale@ewaste.com',  tag: 'Pashan' },
+        { name: 'Akash Patole',     email: 'akash.patole@ewaste.com',     tag: 'Parvati Paytha' },
+        { name: 'Rohit Lokhande',   email: 'rohit.lokhande@ewaste.com',   tag: 'Kalyani Nagar' },
+        { name: 'Swapnil Kadam',    email: 'swapnil.kadam@ewaste.com',    tag: 'Kothrud Depot' },
+        { name: 'Chetan Salvi',     email: 'chetan.salvi@ewaste.com',     tag: 'Wakad' },
+        { name: 'Nitin Pisal',      email: 'nitin.pisal@ewaste.com',      tag: 'Magarpatta' },
+        { name: 'Dinesh Pandit',    email: 'dinesh.pandit@ewaste.com',    tag: 'Balewadi Phata' },
+        { name: 'Mahesh Ghadge',    email: 'mahesh.ghadge@ewaste.com',    tag: 'Katraj' },
+        { name: 'Yogesh Rathod',    email: 'yogesh.rathod@ewaste.com',    tag: 'Yerawada' },
+      ],
+    },
+    {
+      role: 'Recycler companies',
+      password: 'recycler123',
+      accounts: [
+        { name: 'EcoCycle Recyclers Pvt Ltd', email: 'ops@ecocycle.in',              tag: 'Talegaon MIDC · ₹48/kg' },
+        { name: 'GreenMetal Industries',      email: 'procurement@greenmetal.in',    tag: 'Chakan MIDC · ₹55/kg' },
+        { name: 'ReNewTech Solutions',        email: 'sales@renewtech.io',           tag: 'Phursungi · ₹52/kg' },
+        { name: 'Vasundhara E-Waste',         email: 'contact@vasundhara-ewaste.in', tag: 'Bhosari MIDC · ₹50/kg' },
+        { name: 'Triveni Recycling',          email: 'ops@trivenirecycling.in',      tag: 'Alandi Rd · ₹46/kg' },
+        { name: 'CircuitLoop Industries',     email: 'hello@circuitloop.co',         tag: 'Pimpri · ₹58/kg' },
+        { name: 'EcoRevive Resources',        email: 'info@ecorevive.in',            tag: 'Ranjangaon · ₹54/kg' },
+        { name: 'MetalMine Recyclers',        email: 'procurement@metalmine.co.in',  tag: 'Uruli Kanchan · ₹60/kg' },
+        { name: 'PlasticPulse Solutions',     email: 'business@plasticpulse.in',     tag: 'Kharadi EPIP · ₹42/kg' },
+        { name: 'Saksham Green Tech',         email: 'orders@sakshamgreen.in',       tag: 'Bhosari · ₹53/kg' },
+      ],
+    },
   ];
+
+  const totalAccounts = demoCredentialGroups.reduce((n, g) => n + g.accounts.length, 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -168,20 +269,65 @@ export default function Login() {
               </Button>
             </form>
             <div className="mt-4 pt-4 border-t border-border">
-              <p className="text-sm text-muted-foreground mb-2">Demo credentials:</p>
-              <div className="grid gap-1.5">
-                {demoCredentials.map((cred) => (
-                  <button
-                    key={cred.email}
-                    type="button"
-                    onClick={() => { setEmail(cred.email); setPassword(cred.password); }}
-                    className="text-left px-3 py-1.5 rounded hover:bg-muted text-xs border border-border"
+              <div className="flex items-baseline justify-between mb-2">
+                <p className="text-sm text-muted-foreground">Demo credentials</p>
+                <span className="text-xs text-muted-foreground">{totalAccounts} accounts · click to sign in</span>
+              </div>
+              <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                {demoCredentialGroups.map((group) => (
+                  <details
+                    key={group.role}
+                    open={group.defaultOpen}
+                    className="rounded-lg border border-border bg-card group"
                   >
-                    <span className="font-medium text-foreground">{cred.role}</span>
-                    <span className="text-muted-foreground ml-2">{cred.email}</span>
-                  </button>
+                    <summary className="flex items-center justify-between cursor-pointer select-none px-3 py-2 text-sm hover:bg-muted/60 rounded-lg">
+                      <span className="font-medium text-foreground">
+                        {group.role}
+                        <span className="ml-1.5 text-xs text-muted-foreground">({group.accounts.length})</span>
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-mono">
+                        pw: {group.password}
+                      </span>
+                    </summary>
+                    <div className="grid gap-1 p-2 pt-0">
+                      {group.accounts.map((acc) => {
+                        const isBusy = loadingDemoEmail === acc.email;
+                        const anyBusy = !!loadingDemoEmail || isLoading;
+                        return (
+                          <button
+                            key={acc.email}
+                            type="button"
+                            disabled={anyBusy}
+                            onClick={() => handleDemoLogin(acc.email, group.password)}
+                            className={`text-left px-2.5 py-1.5 rounded border transition-colors ${
+                              isBusy
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border/70 hover:bg-primary/5 hover:border-primary/40'
+                            } ${anyBusy && !isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="font-medium text-foreground text-xs truncate flex items-center gap-1.5">
+                                {isBusy && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+                                {acc.name}
+                              </span>
+                              {acc.tag && !isBusy && (
+                                <span className="text-[10px] text-muted-foreground truncate">{acc.tag}</span>
+                              )}
+                              {isBusy && (
+                                <span className="text-[10px] text-primary font-medium">Signing in…</span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground font-mono truncate">{acc.email}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </details>
                 ))}
               </div>
+              <p className="mt-2 text-[11px] text-muted-foreground text-center">
+                Tip: click any account above to sign in directly — no need to press the Login button.
+              </p>
             </div>
           </TabsContent>
 

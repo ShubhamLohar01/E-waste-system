@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { GoogleSignInButton } from '@/components/GoogleSignInButton';
 import { AlertCircle, Loader2, Recycle, Mail } from 'lucide-react';
 
+// Admin cannot be created via public registration — enforced server-side too.
 const ROLES = [
   { value: 'small_user', label: 'Small Individual User', description: 'Submit e-waste and earn rewards' },
   { value: 'local_collector', label: 'Local Collector', description: 'Collect waste from multiple users' },

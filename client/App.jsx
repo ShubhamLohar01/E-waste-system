@@ -21,6 +21,7 @@ import RecyclerDashboard from "./pages/dashboards/RecyclerDashboard";
 import BulkGeneratorDashboard from "./pages/dashboards/BulkGeneratorDashboard";
 import AdminDashboard from "./pages/dashboards/AdminDashboard";
 import RewardWallet from "./pages/RewardWallet";
+import Profile from "./pages/Profile";
 
 const queryClient = new QueryClient();
 
@@ -103,6 +104,16 @@ export default function App() {
                 element={
                   <ProtectedRoute requiredRole="small_user">
                     <RewardWallet />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Profile (any authenticated user) */}
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
                   </ProtectedRoute>
                 }
               />

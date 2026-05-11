@@ -3,61 +3,68 @@ import { inventory } from '../models/Inventory';
 import { intents } from '../models/Intent';
 import { users } from '../models/User';
 import { verifyAuth, requireRole } from '../middleware/auth';
-import { generateQRCode, generateCollectionId } from '../utils/helpers';
+import { generateQRCode, generateCollectionId, validateImageDataUrl } from '../utils/helpers';
+import { haversineKm } from '../utils/distance.js';
+import { notify } from '../services/notificationService.js';
 
 const router = Router();
 
 /**
- * GET /api/collector/pending
- * All submitted (unassigned) intents that collectors can self-accept
+ * GET /api/collector/pending — unassigned requests sorted by distance from me
  */
 router.get('/pending', verifyAuth, requireRole('local_collector'), (req, res) => {
   try {
-    const pendingIntents = intents
-      .filter(i => i.status === 'submitted' && !i.assignedCollector)
-      .map(intent => {
-        const sourceUser = users.find(u => u._id === intent.userId);
+    const me = users.find((u) => u._id === req.user.id);
+    const myLoc = me?.location;
+
+    const pending = intents
+      .filter((i) => i.status === 'submitted' && !i.assignedCollector)
+      .map((intent) => {
+        const sourceUser = users.find((u) => u._id === intent.userId);
+        const distanceKm = haversineKm(myLoc, intent.location);
         return {
           ...intent,
           userName: sourceUser?.name || 'Unknown',
           userPhone: sourceUser?.phone || '',
           userAddress: intent.location?.address || '',
+          distanceKm: Number.isFinite(distanceKm) ? Number(distanceKm.toFixed(2)) : null,
         };
-      });
+      })
+      .sort((a, b) => (a.distanceKm ?? 9e9) - (b.distanceKm ?? 9e9));
 
-    res.json({ intents: pendingIntents, total: pendingIntents.length });
+    res.json({ intents: pending, total: pending.length });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 /**
- * POST /api/collector/accept
- * Collector self-assigns to a submitted intent
+ * POST /api/collector/accept — lock request to me + notify small user
  */
 router.post('/accept', verifyAuth, requireRole('local_collector'), (req, res) => {
   try {
     const { intentId } = req.body;
-    if (!intentId) {
-      return res.status(400).json({ error: 'intentId required' });
-    }
+    if (!intentId) return res.status(400).json({ error: 'intentId required' });
 
-    const intent = intents.find(i => i._id === intentId);
-    if (!intent) {
-      return res.status(404).json({ error: 'Request not found' });
-    }
+    const intent = intents.find((i) => i._id === intentId);
+    if (!intent) return res.status(404).json({ error: 'Request not found' });
     if (intent.status !== 'submitted' || intent.assignedCollector) {
       return res.status(409).json({ error: 'Request already accepted by another collector' });
     }
 
     intent.assignedCollector = req.user.id;
     intent.status = 'assigned';
-    intent.updatedAt = new Date();
+    intent.updatedAt = new Date().toISOString();
 
-    res.json({
-      message: 'Request accepted successfully',
-      intent,
+    const me = users.find((u) => u._id === req.user.id);
+    notify(intent.userId, {
+      type: 'pickup_accepted',
+      title: 'Your pickup has been accepted',
+      message: `${me?.name || 'A collector'} has accepted your pickup request and will collect your e-waste shortly. Phone: ${me?.phone || '—'}`,
+      relatedId: intent._id,
     });
+
+    res.json({ message: 'Request accepted', intent, collectorName: me?.name });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -65,15 +72,14 @@ router.post('/accept', verifyAuth, requireRole('local_collector'), (req, res) =>
 
 /**
  * GET /api/collector/assignments
- * View assigned pickups with enriched user data
  */
 router.get('/assignments', verifyAuth, requireRole('local_collector'), (req, res) => {
   try {
-    const assignedIntents = intents
-      .filter(i => i.assignedCollector === req.user.id && i.status !== 'cancelled')
-      .map(intent => {
-        const sourceUser = users.find(u => u._id === intent.userId);
-        const items = inventory.filter(i => i.intentId === intent._id);
+    const assigned = intents
+      .filter((i) => i.assignedCollector === req.user.id && i.status !== 'cancelled')
+      .map((intent) => {
+        const sourceUser = users.find((u) => u._id === intent.userId);
+        const items = inventory.filter((i) => i.intentId === intent._id);
         return {
           ...intent,
           userName: sourceUser?.name || 'Unknown',
@@ -82,66 +88,63 @@ router.get('/assignments', verifyAuth, requireRole('local_collector'), (req, res
           inventoryItems: items,
         };
       });
-
-    res.json({
-      assignments: assignedIntents,
-      total: assignedIntents.length,
-    });
+    res.json({ assignments: assigned, total: assigned.length });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 /**
- * POST /api/collector/collect
- * Log collection with proof
+ * POST /api/collector/collect — mark picked up from source user
  */
 router.post('/collect', verifyAuth, requireRole('local_collector'), (req, res) => {
   try {
     const { intentId, items, photo } = req.body;
-
     if (!intentId || !items || !Array.isArray(items)) {
       return res.status(400).json({ error: 'intentId and items array required' });
     }
-    if (!photo || typeof photo !== 'string') {
-      return res.status(400).json({ error: 'Photo of the collected item(s) is required. Please take or upload a photo before marking as collected.' });
-    }
+    const check = validateImageDataUrl(photo, 5 * 1024 * 1024);
+    if (!check.ok) return res.status(400).json({ error: check.error });
 
-    const intent = intents.find(i => i._id === intentId);
-    if (!intent) {
-      return res.status(404).json({ error: 'Intent not found' });
-    }
+    const intent = intents.find((i) => i._id === intentId);
+    if (!intent) return res.status(404).json({ error: 'Intent not found' });
 
+    const now = new Date().toISOString();
     intent.status = 'collected';
-    intent.updatedAt = new Date();
+    intent.updatedAt = now;
 
-    const existingCollectionIds = inventory
-      .filter((i) => i.collectionId)
-      .map((i) => i.collectionId);
+    const existingCollectionIds = inventory.filter((i) => i.collectionId).map((i) => i.collectionId);
     const updatedItems = [];
-    items.forEach((item) => {
-      const invItem = inventory.find(i => i.intentId === intentId && i.category === item.category);
+    for (const item of items) {
+      const invItem = inventory.find((i) => i.intentId === intentId && i.category === item.category);
       if (invItem) {
         invItem.collectionId = generateCollectionId(existingCollectionIds);
         existingCollectionIds.push(invItem.collectionId);
         invItem.status = 'collected';
-        invItem.qrCode = generateQRCode();
+        invItem.qrCode = generateQRCode(invItem._id);
         invItem.collectorId = req.user.id;
         invItem.verificationPhotos.push(photo);
         invItem.traceability.push({
           actor: req.user.id,
+          actorName: users.find((u) => u._id === req.user.id)?.name,
           action: 'collected',
-          timestamp: new Date(),
-          qrScanned: false,
+          timestamp: now,
           photo,
         });
-        invItem.updatedAt = new Date();
+        invItem.updatedAt = now;
         updatedItems.push(invItem);
       }
+    }
+
+    notify(intent.userId, {
+      type: 'picked_up',
+      title: 'Your e-waste has been picked up',
+      message: `Your items were collected. They are now heading to the hub for verification.`,
+      relatedId: intent._id,
     });
 
     res.json({
-      message: 'Collection logged successfully',
+      message: 'Collection logged',
       intent,
       itemsCollected: updatedItems.length,
       updatedItems,
@@ -152,62 +155,69 @@ router.post('/collect', verifyAuth, requireRole('local_collector'), (req, res) =
 });
 
 /**
- * POST /api/collector/hub-delivery
- * Record delivery to hub
+ * POST /api/collector/hub-delivery — hand over to a hub
  */
 router.post('/hub-delivery', verifyAuth, requireRole('local_collector'), (req, res) => {
   try {
-    const { intentId, hubId, itemIds } = req.body;
-
+    const { hubId, itemIds } = req.body;
     if (!hubId || !itemIds || !Array.isArray(itemIds)) {
       return res.status(400).json({ error: 'hubId and itemIds array required' });
     }
 
-    const hub = users.find(u => u._id === hubId && u.role === 'hub');
-    if (!hub) {
-      return res.status(404).json({ error: 'Hub not found' });
-    }
+    const hub = users.find((u) => u._id === hubId && u.role === 'hub');
+    if (!hub) return res.status(404).json({ error: 'Hub not found' });
 
-    itemIds.forEach((itemId) => {
-      const invItem = inventory.find(i => i._id === itemId);
+    const now = new Date().toISOString();
+    const me = users.find((u) => u._id === req.user.id);
+    for (const itemId of itemIds) {
+      const invItem = inventory.find((i) => i._id === itemId);
       if (invItem) {
         invItem.status = 'at_hub';
         invItem.hubId = hubId;
         invItem.traceability.push({
           actor: req.user.id,
+          actorName: me?.name,
           action: 'delivered_to_hub',
-          timestamp: new Date(),
-          qrScanned: false,
+          timestamp: now,
         });
-        invItem.updatedAt = new Date();
+        invItem.updatedAt = now;
       }
+    }
+
+    notify(hubId, {
+      type: 'incoming_shipment',
+      title: 'Incoming items from a collector',
+      message: `${me?.name || 'A collector'} has delivered ${itemIds.length} item(s). Please receive and verify.`,
     });
 
-    res.json({
-      message: 'Hub delivery recorded successfully',
-      hubName: hub.name,
-      itemsDelivered: itemIds.length,
-    });
+    res.json({ message: 'Hub delivery recorded', hubName: hub.name, itemsDelivered: itemIds.length });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 /**
- * GET /api/collector/hubs
- * Get list of available hubs
+ * GET /api/collector/hubs — nearest hubs first
  */
 router.get('/hubs', verifyAuth, requireRole('local_collector'), (req, res) => {
   try {
+    const me = users.find((u) => u._id === req.user.id);
     const hubs = users
-      .filter(u => u.role === 'hub' && u.isActive)
-      .map(u => ({
-        _id: u._id,
-        name: u.name,
-        address: u.location?.address || '',
-        phone: u.phone,
-      }));
-
+      .filter((u) => u.role === 'hub' && u.isActive)
+      .map((u) => {
+        const distanceKm = haversineKm(me?.location, u.location);
+        return {
+          _id: u._id,
+          name: u.name,
+          address: u.location?.address || '',
+          lat: u.location?.lat ?? null,
+          lng: u.location?.lng ?? null,
+          phone: u.phone,
+          email: u.email,
+          distanceKm: Number.isFinite(distanceKm) ? Number(distanceKm.toFixed(2)) : null,
+        };
+      })
+      .sort((a, b) => (a.distanceKm ?? 9e9) - (b.distanceKm ?? 9e9));
     res.json({ hubs });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -215,34 +225,18 @@ router.get('/hubs', verifyAuth, requireRole('local_collector'), (req, res) => {
 });
 
 /**
- * GET /api/collector/routes
- * View collection routes
- */
-router.get('/routes', verifyAuth, requireRole('local_collector'), (req, res) => {
-  try {
-    const myIntents = intents.filter(i => i.assignedCollector === req.user.id);
-
-    res.json({
-      routes: myIntents,
-      total: myIntents.length,
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
  * GET /api/collector/history
- * Collection history - completed work
  */
 router.get('/history', verifyAuth, requireRole('local_collector'), (req, res) => {
   try {
-    const collectedItems = inventory.filter(i => i.collectorId === req.user.id);
-
+    const collectedItems = inventory.filter((i) => i.collectorId === req.user.id);
     res.json({
       items: collectedItems,
       totalCollected: collectedItems.length,
-      deliveredToHub: collectedItems.filter(i => ['at_hub', 'verified', 'matched', 'in_transit', 'delivered', 'processed'].includes(i.status)).length,
+      deliveredToHub: collectedItems.filter((i) =>
+        ['at_hub', 'verified', 'matched', 'in_transit', 'delivered', 'processed'].includes(i.status)
+      ).length,
+      processed: collectedItems.filter((i) => i.status === 'processed').length,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const u = require\\('./server/data/users.json'\\); console.log\\('Total users:', u.length\\); console.log\\('First admin:', u.filter\\(x => x.role === 'admin'\\).map\\(x => \\({email:x.email, hasPwd: !!x.password, pwdLen: x.password?.length, isActive:x.isActive}\\)\\)\\); console.log\\('hrithik:', u.find\\(x => x.email === 'hrithik@ewaste.com'\\) ? 'EXISTS' : 'MISSING'\\); console.log\\('ops@ecocycle.in:', u.find\\(x => x.email === 'ops@ecocycle.in'\\) ? 'EXISTS' : 'MISSING'\\); console.log\\('ajit.mane:', u.find\\(x => x.email === 'ajit.mane@ewaste.com'\\) ? 'EXISTS' : 'MISSING'\\);\")",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" -X POST http://localhost:8080/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"ops@ecocycle.in\\\\\",\\\\\"password\\\\\":\\\\\"recycler123\\\\\"}\")"
+    ]
+  }
+}

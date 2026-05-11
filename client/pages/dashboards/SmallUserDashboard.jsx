@@ -25,6 +25,9 @@ import {
   Coins,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import GoogleMapPicker from "@/components/GoogleMapPicker";
+import NotificationsBell from "@/components/NotificationsBell";
+import RaiseDisputeDialog from "@/components/RaiseDisputeDialog";
 
 const CATEGORIES = [
   "Old Laptops",
@@ -69,7 +72,7 @@ export default function SmallUserDashboard() {
   });
 
   const [formItems, setFormItems] = useState([defaultFormItem()]);
-  const [address, setAddress] = useState("");
+  const [pickupLocation, setPickupLocation] = useState({ lat: null, lng: null, address: "" });
 
   const apiFetch = useCallback(
     async (url, options) => {
@@ -203,18 +206,31 @@ export default function SmallUserDashboard() {
 
     setSubmitting(true);
     try {
+      // Location is optional. If lat/lng aren't set, we still send whatever address
+      // text the user typed so collectors know where to go.
+      const locationPayload =
+        pickupLocation.lat != null && pickupLocation.lng != null
+          ? {
+              lat: pickupLocation.lat,
+              lng: pickupLocation.lng,
+              address: pickupLocation.address || "Pickup location",
+            }
+          : {
+              address: pickupLocation.address || "Pickup location",
+            };
+
       const res = await apiFetch("/api/intent", {
         method: "POST",
         body: JSON.stringify({
           items: payloadItems,
-          location: { lat: 0, lng: 0, address: address || "Not specified" },
+          location: locationPayload,
         }),
       });
 
       if (res.ok) {
         setDialogOpen(false);
         setFormItems([defaultFormItem()]);
-        setAddress("");
+        setPickupLocation({ lat: null, lng: null, address: "" });
         await fetchIntents();
       } else {
         const data = await res.json();
@@ -227,8 +243,8 @@ export default function SmallUserDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 
@@ -268,6 +284,10 @@ export default function SmallUserDashboard() {
               </Link>
             </div>
             <div className="flex items-center gap-3">
+              <NotificationsBell />
+              <Link to="/profile">
+                <Button variant="outline" size="sm" className="hidden md:inline-flex">Profile</Button>
+              </Link>
               <Link to="/reward">
                 <Button variant="outline" size="sm" className="gap-2 border-primary/40 text-primary hover:bg-primary/5">
                   <Coins className="w-4 h-4" />
@@ -449,6 +469,15 @@ export default function SmallUserDashboard() {
                           {intent.location.address}
                         </div>
                       )}
+
+                      {/* Allow small user to raise a dispute if something went wrong */}
+                      <div className="mt-3">
+                        <RaiseDisputeDialog
+                          triggerLabel="Report a problem"
+                          variant="outline"
+                          againstUserId={intent.assignedCollector || undefined}
+                        />
+                      </div>
                     </div>
                   );
                 })}
@@ -676,17 +705,11 @@ export default function SmallUserDashboard() {
             </Button>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 <MapPin className="w-4 h-4 inline mr-1" />
-                Pickup Address
+                Pickup Location
               </label>
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Enter your pickup address"
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none"
-              />
+              <GoogleMapPicker value={pickupLocation} onChange={setPickupLocation} />
             </div>
 
             <Button onClick={handleSubmitIntent} disabled={submitting} className="w-full gap-2">

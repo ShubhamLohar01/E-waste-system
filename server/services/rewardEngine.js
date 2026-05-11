@@ -1,197 +1,139 @@
 import { rewards } from '../models/Reward';
-import { users } from '../models/User';
 import { inventory } from '../models/Inventory';
 import { generateId } from '../utils/helpers';
 
 /**
- * Reward Engine - Handles gamification and behavioral incentives
- * Key: Not cash-based, milestone-based, post-verification only
+ * Reward Engine — tracks a simple point counter per user.
+ * Points are awarded when an inventory item transitions to 'processed'
+ * (= admin has marked the payment as collected from the recycler).
+ *
+ * Three actors earn points per processed item:
+ *   • sourceUserId (small_user)
+ *   • collectorId  (local_collector)
+ *   • hubId        (hub)
  */
 export class RewardEngine {
   static POINTS_PER_KG = 1;
   static POINTS_PER_ITEM = 5;
-  static STREAK_INCREMENT = 1;
-  static STREAK_RESET_DAYS = 7;
 
-  /**
-   * Calculate points earned from an inventory item
-   */
   static calculatePoints(quantity, unit) {
-    if (unit === 'kg') {
-      return Math.floor(quantity * this.POINTS_PER_KG);
-    } else if (unit === 'pieces' || unit === 'items') {
-      return quantity * this.POINTS_PER_ITEM;
-    }
-    return 10; // default
+    if (unit === 'kg') return Math.floor(Number(quantity) * this.POINTS_PER_KG);
+    if (unit === 'pieces' || unit === 'items') return Number(quantity) * this.POINTS_PER_ITEM;
+    return 10;
   }
 
-  /**
-   * Award points to a user (called after inventory item is processed)
-   */
-  static awardPoints(userId, inventoryId, quantity, unit) {
-    const reward = rewards.find((r) => r.userId === userId);
+  /** Award `points` to a user's reward record (creates one on demand). */
+  static awardPoints(userId, inventoryId, points, reason = 'item_processed') {
+    if (!userId || !Number.isFinite(points) || points <= 0) return null;
+    let reward = rewards.find((r) => r.userId === userId);
     if (!reward) {
-      console.warn(`No reward record found for user ${userId}`);
-      return null;
+      reward = {
+        _id: generateId(),
+        userId,
+        totalPoints: 0,
+        currentStreak: 0,
+        badges: [],
+        milestones: [
+          { threshold: 100, reached: false, rewardType: 'bronze' },
+          { threshold: 500, reached: false, rewardType: 'silver' },
+          { threshold: 1000, reached: false, rewardType: 'gold' },
+          { threshold: 5000, reached: false, rewardType: 'platinum' },
+        ],
+        history: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      rewards.push(reward);
     }
-
-    const points = this.calculatePoints(quantity, unit);
     reward.totalPoints += points;
-    reward.currentStreak += this.STREAK_INCREMENT;
-
-    // Add to history
+    reward.currentStreak = (reward.currentStreak || 0) + 1;
     reward.history.push({
-      action: 'points_earned',
+      action: reason,
       points,
       inventoryId,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
     });
-
-    reward.updatedAt = new Date();
+    reward.updatedAt = new Date().toISOString();
+    this.checkAndAwardBadges(userId);
+    this.checkMilestones(userId);
     return reward;
   }
 
-  /**
-   * Check and award badges based on milestones
-   */
   static checkAndAwardBadges(userId) {
     const reward = rewards.find((r) => r.userId === userId);
     if (!reward) return null;
-
-    const badges = [
-      { threshold: 100, name: 'First Step', earned: false },
-      { threshold: 500, name: 'Growing Green', earned: false },
-      { threshold: 1000, name: 'Silver Champion', earned: false },
-      { threshold: 2500, name: 'Gold Guardian', earned: false },
-      { threshold: 5000, name: 'Platinum Pioneer', earned: false },
-      { threshold: 10000, name: 'Diamond Advocate', earned: false },
+    const badgeDefs = [
+      { threshold: 100, name: 'First Step' },
+      { threshold: 500, name: 'Growing Green' },
+      { threshold: 1000, name: 'Silver Champion' },
+      { threshold: 2500, name: 'Gold Guardian' },
+      { threshold: 5000, name: 'Platinum Pioneer' },
+      { threshold: 10000, name: 'Diamond Advocate' },
     ];
-
-    badges.forEach((badge) => {
-      const alreadyEarned = reward.badges.some((b) => b.name === badge.name);
-      if (reward.totalPoints >= badge.threshold && !alreadyEarned) {
-        reward.badges.push({
-          name: badge.name,
-          earnedAt: new Date(),
-        });
+    badgeDefs.forEach((b) => {
+      const already = reward.badges.some((x) => x.name === b.name);
+      if (reward.totalPoints >= b.threshold && !already) {
+        reward.badges.push({ name: b.name, earnedAt: new Date().toISOString() });
       }
     });
-
     return reward;
   }
 
-  /**
-   * Check milestone progress
-   */
   static checkMilestones(userId) {
     const reward = rewards.find((r) => r.userId === userId);
     if (!reward) return null;
-
-    reward.milestones.forEach((milestone) => {
-      if (reward.totalPoints >= milestone.threshold) {
-        milestone.reached = true;
-      }
+    reward.milestones.forEach((m) => {
+      if (reward.totalPoints >= m.threshold) m.reached = true;
     });
-
     return reward;
   }
 
   /**
-   * Award points for a completed inventory item
-   * Called when item reaches 'processed' state
+   * Award points to the three participants when an item becomes 'processed'.
+   * Returns { sourceUser, collector, hub } with points each received.
    */
-  static awardCompletionPoints(userId, inventoryId) {
-    const item = inventory.find((i) => i._id === inventoryId);
+  static awardTripleOnProcessed(item) {
     if (!item) return null;
-
-    // Only award if item is processed
-    if (item.status !== 'processed') {
-      console.warn(`Item ${inventoryId} is not processed yet`);
-      return null;
+    const basePoints = this.calculatePoints(item.actualQty, item.unit);
+    const out = { sourceUser: 0, collector: 0, hub: 0 };
+    if (item.sourceUserId) {
+      this.awardPoints(item.sourceUserId, item._id, basePoints, 'item_processed_source');
+      out.sourceUser = basePoints;
     }
-
-    const reward = this.awardPoints(userId, inventoryId, item.actualQty, item.unit);
-    if (!reward) return null;
-
-    this.checkAndAwardBadges(userId);
-    this.checkMilestones(userId);
-
-    return reward;
+    if (item.collectorId) {
+      const p = Math.max(1, Math.round(basePoints * 0.5));
+      this.awardPoints(item.collectorId, item._id, p, 'item_processed_collector');
+      out.collector = p;
+    }
+    if (item.hubId) {
+      const p = Math.max(1, Math.round(basePoints * 0.3));
+      this.awardPoints(item.hubId, item._id, p, 'item_processed_hub');
+      out.hub = p;
+    }
+    return out;
   }
 
-  /**
-   * Reset streak if user hasn't contributed in X days
-   */
-  static resetStreakIfNeeded(userId) {
-    const reward = rewards.find((r) => r.userId === userId);
-    if (!reward) return;
-
-    const lastAction = reward.history[reward.history.length - 1];
-    if (!lastAction) {
-      reward.currentStreak = 0;
-      return;
-    }
-
-    const daysSinceAction = Math.floor(
-      (new Date().getTime() - lastAction.timestamp.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    if (daysSinceAction > this.STREAK_RESET_DAYS) {
-      reward.currentStreak = 0;
-    }
-  }
-
-  /**
-   * Get reward summary for a user
-   */
   static getRewardSummary(userId) {
     const reward = rewards.find((r) => r.userId === userId);
     if (!reward) return null;
-
-    // Find next unreached milestone
     const nextMilestone = reward.milestones.find((m) => !m.reached);
-    const pointsToNextMilestone = nextMilestone
-      ? nextMilestone.threshold - reward.totalPoints
-      : null;
-
     return {
       totalPoints: reward.totalPoints,
       currentStreak: reward.currentStreak,
       badges: reward.badges.map((b) => b.name),
       nextMilestone: nextMilestone
-        ? { threshold: nextMilestone.threshold, pointsNeeded: pointsToNextMilestone || 0 }
+        ? {
+            threshold: nextMilestone.threshold,
+            pointsNeeded: Math.max(0, nextMilestone.threshold - reward.totalPoints),
+          }
         : null,
     };
   }
 
-  /**
-   * Tier-based benefits (non-monetary)
-   */
   static getBenefitsForTier(totalPoints) {
-    if (totalPoints >= 5000) {
-      return {
-        tier: 'Platinum',
-        benefits: [
-          'Priority pickup scheduling',
-          '20% discount on partner services',
-          'Monthly newsletter',
-          'Community recognition',
-        ],
-      };
-    } else if (totalPoints >= 1000) {
-      return {
-        tier: 'Gold',
-        benefits: [
-          'Standard pickup scheduling',
-          '10% discount on partner services',
-          'Community forum access',
-        ],
-      };
-    } else {
-      return {
-        tier: 'Silver',
-        benefits: ['Basic pickup scheduling', 'Community forum access'],
-      };
-    }
+    if (totalPoints >= 5000)
+      return { tier: 'Platinum', benefits: ['Priority pickup scheduling', '20% discount on partner services'] };
+    if (totalPoints >= 1000) return { tier: 'Gold', benefits: ['Standard pickup scheduling', '10% discount'] };
+    return { tier: 'Silver', benefits: ['Basic pickup scheduling'] };
   }
 }
