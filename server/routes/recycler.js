@@ -244,7 +244,10 @@ router.get('/boxes', verifyAuth, requireRole('recycler'), (req, res) => {
     const visible = boxes.filter((b) => {
       const it = myItems.get(b.inventoryId);
       if (!it) return false;
-      return ['delivered', 'processed'].includes(it.status) || b.status === 'acknowledged';
+      // Only physically printed boxes are relevant (ignore unprinted previews);
+      // they become visible once the item has been delivered to this recycler.
+      if (!['printed', 'acknowledged'].includes(b.status)) return false;
+      return ['delivered', 'processed'].includes(it.status);
     });
 
     const groups = {};
@@ -305,7 +308,8 @@ router.post('/acknowledge', verifyAuth, requireRole('recycler'), validate(acknow
 
     const me = users.find((u) => u._id === req.user.id);
     const now = new Date().toISOString();
-    if (box.status !== 'acknowledged') {
+    const alreadyAcked = box.status === 'acknowledged';
+    if (!alreadyAcked) {
       box.status = 'acknowledged';
       box.recyclerId = req.user.id;
       box.recyclerCompany = me?.name || '';
@@ -313,7 +317,10 @@ router.post('/acknowledge', verifyAuth, requireRole('recycler'), validate(acknow
       box.updatedAt = now;
     }
 
-    const itemBoxes = boxes.filter((b) => b.inventoryId === item._id);
+    // Count only printed/acknowledged boxes — unprinted previews never gate completion.
+    const itemBoxes = boxes.filter(
+      (b) => b.inventoryId === item._id && ['printed', 'acknowledged'].includes(b.status),
+    );
     const acknowledged = itemBoxes.filter((b) => b.status === 'acknowledged').length;
     const complete = itemBoxes.length > 0 && acknowledged === itemBoxes.length;
     if (complete && !item.traceability.some((t) => t.action === 'received_at_recycler')) {
@@ -326,7 +333,13 @@ router.post('/acknowledge', verifyAuth, requireRole('recycler'), validate(acknow
       item.updatedAt = now;
     }
 
-    res.json({ message: 'Box acknowledged', boxId: box._id, acknowledged, total: itemBoxes.length, complete });
+    res.json({
+      message: alreadyAcked ? 'Box already acknowledged' : 'Box acknowledged',
+      boxId: box._id,
+      acknowledged,
+      total: itemBoxes.length,
+      complete,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
