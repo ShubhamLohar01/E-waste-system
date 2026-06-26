@@ -2,12 +2,95 @@ import { Router } from 'express';
 import { inventory } from '../models/Inventory';
 import { deliveries } from '../models/Delivery';
 import { users } from '../models/User';
+import { recyclerRequests } from '../models/RecyclerRequest.js';
 import { verifyAuth, requireRole } from '../middleware/auth';
-import { generateId } from '../utils/helpers';
+import { nextId, PREFIX } from '../utils/idGenerator.js';
+import { maskCode } from '../utils/helpers.js';
 import { notify } from '../services/notificationService.js';
-import { validate, assignDeliverySchema } from '../schemas.js';
+import { validate, assignDeliverySchema, recyclerRequestSchema, acknowledgeBoxSchema } from '../schemas.js';
+import { boxes } from '../models/Box';
+import { verifyBoxQr } from '../utils/boxCodes.js';
 
 const router = Router();
+
+/**
+ * POST /api/recycler/requests — raise a material request to the admin.
+ */
+router.post('/requests', verifyAuth, requireRole('recycler'), validate(recyclerRequestSchema), (req, res) => {
+  try {
+    const { category, quantity, unit, note, targetDate } = req.body;
+    const now = new Date().toISOString();
+    const request = {
+      _id: nextId(PREFIX.REQUEST),
+      recyclerId: req.user.id,
+      category,
+      quantity,
+      unit: unit || 'kg',
+      note: note || null,
+      targetDate: targetDate || null,
+      status: 'pending',
+      allocatedInventory: [],
+      reviewedBy: null,
+      reviewNote: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    recyclerRequests.push(request);
+
+    const me = users.find((u) => u._id === req.user.id);
+    users
+      .filter((u) => u.role === 'admin')
+      .forEach((a) =>
+        notify(a._id, {
+          type: 'recycler_request',
+          title: 'New recycler material request',
+          message: `${me?.name || 'A recycler'} requested ${quantity} ${unit || 'kg'} of ${category}. Review to assign stock.`,
+          relatedId: request._id,
+        })
+      );
+
+    res.status(201).json({ message: 'Request submitted to admin', request });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/recycler/requests — my requests with status.
+ */
+router.get('/requests', verifyAuth, requireRole('recycler'), (req, res) => {
+  try {
+    const mine = recyclerRequests
+      .filter((r) => r.recyclerId === req.user.id)
+      .map((r) => ({
+        ...r,
+        allocatedCount: (r.allocatedInventory || []).length,
+      }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json({ requests: mine, total: mine.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/recycler/requests/:id/cancel — withdraw a still-pending request.
+ */
+router.post('/requests/:id/cancel', verifyAuth, requireRole('recycler'), (req, res) => {
+  try {
+    const request = recyclerRequests.find((r) => r._id === req.params.id);
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.recyclerId !== req.user.id) return res.status(403).json({ error: 'Unauthorized' });
+    if (request.status !== 'pending') {
+      return res.status(409).json({ error: `Only pending requests can be cancelled (current: ${request.status}).` });
+    }
+    request.status = 'cancelled';
+    request.updatedAt = new Date().toISOString();
+    res.json({ message: 'Request cancelled', request });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 /**
  * GET /api/recycler/orders — items admin has assigned to me
@@ -17,12 +100,11 @@ router.get('/orders', verifyAuth, requireRole('recycler'), (req, res) => {
     const items = inventory
       .filter((i) => i.recyclerId === req.user.id)
       .map((item) => {
-        const hub = item.hubId ? users.find((u) => u._id === item.hubId) : null;
         const del = item.deliveryWorkerId ? users.find((u) => u._id === item.deliveryWorkerId) : null;
+        // Hub identity is hidden from recyclers — they only see an opaque hub code.
         return {
           ...item,
-          hubName: hub?.name,
-          hubAddress: hub?.location?.address,
+          hubCode: maskCode(item.hubId, 'HUB'),
           deliveryWorkerName: del?.name,
         };
       });
@@ -82,7 +164,7 @@ router.post('/assign-delivery', verifyAuth, requireRole('recycler'), validate(as
 
     const now = new Date().toISOString();
     const delivery = {
-      _id: generateId(),
+      _id: nextId(PREFIX.DELIVERY),
       deliveryWorkerId,
       pickupHub: pickupHubId,
       dropoffRecycler: req.user.id,
@@ -137,15 +219,114 @@ router.get('/deliveries', verifyAuth, requireRole('recycler'), (req, res) => {
       .filter((d) => d.dropoffRecycler === req.user.id)
       .map((d) => {
         const worker = users.find((u) => u._id === d.deliveryWorkerId);
-        const hub = users.find((u) => u._id === d.pickupHub);
+        // Hub identity hidden — recycler sees only an opaque hub code.
         return {
           ...d,
           deliveryWorkerName: worker?.name,
           deliveryWorkerPhone: worker?.phone,
-          hubName: hub?.name,
+          hubCode: maskCode(d.pickupHub, 'HUB'),
         };
       });
     res.json({ deliveries: mine, total: mine.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/recycler/boxes — boxes for my delivered items, grouped by item.
+ */
+router.get('/boxes', verifyAuth, requireRole('recycler'), (req, res) => {
+  try {
+    const myItems = new Map(
+      inventory.filter((i) => i.recyclerId === req.user.id).map((i) => [i._id, i]),
+    );
+    const visible = boxes.filter((b) => {
+      const it = myItems.get(b.inventoryId);
+      if (!it) return false;
+      return ['delivered', 'processed'].includes(it.status) || b.status === 'acknowledged';
+    });
+
+    const groups = {};
+    for (const b of visible) {
+      if (!groups[b.inventoryId]) {
+        const it = myItems.get(b.inventoryId);
+        groups[b.inventoryId] = {
+          inventoryId: b.inventoryId,
+          itemName: b.itemName || it?.category,
+          transactionNo: b.transactionNo,
+          total: 0,
+          acknowledged: 0,
+          boxes: [],
+        };
+      }
+      const g = groups[b.inventoryId];
+      g.total += 1;
+      if (b.status === 'acknowledged') g.acknowledged += 1;
+      g.boxes.push({
+        boxId: b._id,
+        qrPayload: b.qrPayload,
+        netWeightKg: b.netWeightKg,
+        boxSeq: b.boxSeq,
+        boxCount: b.boxCount,
+        status: b.status,
+      });
+    }
+    const items = Object.values(groups).map((g) => ({
+      ...g,
+      boxes: g.boxes.sort((a, b) => a.boxSeq - b.boxSeq),
+    }));
+    res.json({ items, total: items.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/recycler/acknowledge — recycler scanned a box QR on receipt.
+ * Records the recycler company on the box; marks the item received once all boxes are in.
+ */
+router.post('/acknowledge', verifyAuth, requireRole('recycler'), validate(acknowledgeBoxSchema), (req, res) => {
+  try {
+    const { scannedQr } = req.body;
+    const decoded = verifyBoxQr(scannedQr);
+    if (!decoded) return res.status(400).json({ error: 'Invalid or unrecognised QR code.' });
+
+    const box = boxes.find((b) => b._id === decoded.boxId);
+    if (!box) return res.status(404).json({ error: 'Box not found.' });
+
+    const item = inventory.find((i) => i._id === box.inventoryId);
+    if (!item || item.recyclerId !== req.user.id) {
+      return res.status(403).json({ error: 'This box is not assigned to you.' });
+    }
+    if (!['delivered', 'processed'].includes(item.status)) {
+      return res.status(409).json({ error: 'Item has not been delivered yet.' });
+    }
+
+    const me = users.find((u) => u._id === req.user.id);
+    const now = new Date().toISOString();
+    if (box.status !== 'acknowledged') {
+      box.status = 'acknowledged';
+      box.recyclerId = req.user.id;
+      box.recyclerCompany = me?.name || '';
+      box.acknowledgedAt = now;
+      box.updatedAt = now;
+    }
+
+    const itemBoxes = boxes.filter((b) => b.inventoryId === item._id);
+    const acknowledged = itemBoxes.filter((b) => b.status === 'acknowledged').length;
+    const complete = itemBoxes.length > 0 && acknowledged === itemBoxes.length;
+    if (complete && !item.traceability.some((t) => t.action === 'received_at_recycler')) {
+      item.traceability.push({
+        actor: req.user.id,
+        actorName: me?.name,
+        action: 'received_at_recycler',
+        timestamp: now,
+      });
+      item.updatedAt = now;
+    }
+
+    res.json({ message: 'Box acknowledged', boxId: box._id, acknowledged, total: itemBoxes.length, complete });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
