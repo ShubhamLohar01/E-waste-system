@@ -44,3 +44,32 @@ export function generateBoxPrefix(existingBoxIds = [], rng = Math.random) {
   }
   throw new Error('Could not allocate a free box prefix');
 }
+
+/** Signed QR payload encoding the transaction + box id. */
+export function boxQrPayload(transactionNo, boxId) {
+  const body = `BOX.${transactionNo}.${boxId}`;
+  const sig = crypto.createHmac('sha256', qrSecret()).update(body).digest('hex').slice(0, 12);
+  return `${body}.${sig}`;
+}
+
+/** { transactionNo, boxId } when the signature is valid, else null. */
+export function verifyBoxQr(payload) {
+  if (typeof payload !== 'string') return null;
+  const parts = payload.split('.');
+  if (parts.length !== 4 || parts[0] !== 'BOX') return null;
+  const [, transactionNo, boxId, sig] = parts;
+  const expect = crypto
+    .createHmac('sha256', qrSecret())
+    .update(`BOX.${transactionNo}.${boxId}`)
+    .digest('hex')
+    .slice(0, 12);
+  let valid = false;
+  try {
+    valid =
+      sig.length === expect.length &&
+      crypto.timingSafeEqual(Buffer.from(sig, 'utf8'), Buffer.from(expect, 'utf8'));
+  } catch {
+    valid = false;
+  }
+  return valid ? { transactionNo, boxId } : null;
+}

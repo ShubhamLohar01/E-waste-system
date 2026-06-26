@@ -4,6 +4,8 @@ import {
   generateTransactionNo,
   makeBoxId,
   generateBoxPrefix,
+  boxQrPayload,
+  verifyBoxQr,
 } from './boxCodes.js';
 
 describe('transaction number', () => {
@@ -38,5 +40,24 @@ describe('box id', () => {
     let i = 0;
     const rng = () => seq[i++];
     expect(generateBoxPrefix(['BI-AAA0001'], rng)).toBe('ZZZ');
+  });
+});
+
+describe('box QR payload', () => {
+  it('round-trips transaction + box id through sign/verify', () => {
+    const p = boxQrPayload('TR-20260626143000', 'BI-ABC0001');
+    expect(p.startsWith('BOX.TR-20260626143000.BI-ABC0001.')).toBe(true);
+    expect(verifyBoxQr(p)).toEqual({
+      transactionNo: 'TR-20260626143000',
+      boxId: 'BI-ABC0001',
+    });
+  });
+
+  it('rejects tampered or malformed payloads', () => {
+    const p = boxQrPayload('TR-20260626143000', 'BI-ABC0001');
+    expect(verifyBoxQr(p.slice(0, -1) + '0')).toBeNull(); // last sig char flipped
+    expect(verifyBoxQr('garbage')).toBeNull();
+    expect(verifyBoxQr('BOX.a.b')).toBeNull(); // too few parts
+    expect(verifyBoxQr(null)).toBeNull();
   });
 });
