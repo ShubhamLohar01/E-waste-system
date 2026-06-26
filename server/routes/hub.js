@@ -107,6 +107,15 @@ router.post('/verify', verifyAuth, requireRole('hub'), validate(hubVerifySchema)
         boxes.push(box);
         myBoxes.push(box);
       }
+    } else {
+      // Same box count: refresh mutable fields so the preview reflects this submission.
+      const weights = splitNetWeight(item.weightKg, count);
+      myBoxes.forEach((b, idx) => {
+        b.netWeightKg = weights[idx];
+        b.itemName = item.category;
+        b.unit = item.unit;
+        b.updatedAt = now;
+      });
     }
 
     res.json({
@@ -140,6 +149,9 @@ router.post('/confirm-print', verifyAuth, requireRole('hub'), validate(confirmPr
     const item = inventory.find((i) => i._id === inventoryId);
     if (!item) return res.status(404).json({ error: 'Inventory item not found' });
     if (item.hubId !== req.user.id) return res.status(403).json({ error: 'Not your item' });
+    if (item.status !== 'pending_print') {
+      return res.status(409).json({ error: `Cannot confirm: item status is '${item.status}'.` });
+    }
 
     const myBoxes = boxes.filter((b) => b.inventoryId === item._id && b.status === 'pending_print');
     if (myBoxes.length === 0) {
