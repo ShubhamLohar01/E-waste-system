@@ -210,6 +210,17 @@ router.get('/inventory', verifyAuth, requireRole('hub'), (req, res) => {
           ...item,
           sourceUserName: sourceUser?.name || 'Unknown',
           recyclerCode: maskCode(item.recyclerId, 'REC'),
+          boxes: boxes
+            .filter((bx) => bx.inventoryId === item._id)
+            .sort((x, y) => x.boxSeq - y.boxSeq)
+            .map((bx) => ({
+              boxId: bx._id,
+              transactionNo: bx.transactionNo,
+              netWeightKg: bx.netWeightKg,
+              boxSeq: bx.boxSeq,
+              boxCount: bx.boxCount,
+              status: bx.status,
+            })),
         };
       });
 

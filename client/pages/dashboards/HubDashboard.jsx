@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -18,6 +18,8 @@ import {
   ClipboardCheck,
   Boxes,
   Eye,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import NotificationsBell from "@/components/NotificationsBell";
@@ -47,6 +49,7 @@ export default function HubDashboard() {
   const [staged, setStaged] = useState(null);     // prepare response: { boxes, transactionNo, item } -> drives the inline print panel
   const [printed, setPrinted] = useState(false);  // hub clicked "Print all" for the staged boxes
   const [verifyBoxCount, setVerifyBoxCount] = useState(1);
+  const [expandedId, setExpandedId] = useState(null); // verified-inventory row expanded
   const [flagDialog, setFlagDialog] = useState(false);
   const [flagReason, setFlagReason] = useState("");
 
@@ -476,22 +479,109 @@ export default function HubDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {verifiedItems.map((item) => (
-                      <tr key={item._id} className="hover:bg-muted/20">
-                        <td className="px-4 py-3 text-sm font-medium text-foreground">{item.category}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{item.qrCode.slice(0, 15)}...</td>
-                        <td className="px-4 py-3 text-sm text-foreground">{item.actualQty} {item.unit}</td>
-                        <td className="px-4 py-3 text-sm text-foreground capitalize">{item.condition}</td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium border capitalize ${
-                            statusColorMap[item.status] || "bg-gray-50 text-gray-700 border-gray-200"
-                          }`}>
-                            {item.status.replace("_", " ")}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{item.sourceUserName || "—"}</td>
-                      </tr>
-                    ))}
+                    {verifiedItems.map((item) => {
+                      const isOpen = expandedId === item._id;
+                      return (
+                        <Fragment key={item._id}>
+                          <tr
+                            className="hover:bg-muted/20 cursor-pointer"
+                            onClick={() => setExpandedId(isOpen ? null : item._id)}
+                          >
+                            <td className="px-4 py-3 text-sm font-medium text-foreground">
+                              <span className="inline-flex items-center gap-2">
+                                {isOpen ? (
+                                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                )}
+                                {item.category}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{item.qrCode.slice(0, 15)}...</td>
+                            <td className="px-4 py-3 text-sm text-foreground">{item.actualQty} {item.unit}</td>
+                            <td className="px-4 py-3 text-sm text-foreground capitalize">{item.condition}</td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium border capitalize ${
+                                statusColorMap[item.status] || "bg-gray-50 text-gray-700 border-gray-200"
+                              }`}>
+                                {item.status.replace("_", " ")}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-muted-foreground">{item.sourceUserName || "—"}</td>
+                          </tr>
+                          {isOpen && (
+                            <tr className="bg-muted/10">
+                              <td colSpan={6} className="px-4 py-4">
+                                <div className="grid gap-6 lg:grid-cols-3">
+                                  {/* Details */}
+                                  <div className="space-y-1 text-sm">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Details</p>
+                                    <p><span className="text-muted-foreground">QR:</span> <span className="font-mono break-all">{item.qrCode}</span></p>
+                                    <p><span className="text-muted-foreground">Weight:</span> {item.weightKg != null ? `${item.weightKg} kg` : "—"}</p>
+                                    <p><span className="text-muted-foreground">Condition:</span> <span className="capitalize">{item.condition || "—"}</span></p>
+                                    <p><span className="text-muted-foreground">Source:</span> {item.sourceUserName || "—"}</p>
+                                    <p><span className="text-muted-foreground">Recycler:</span> {item.recyclerCode || "—"}</p>
+                                    <p><span className="text-muted-foreground">Verified:</span> {item.hubVerifiedAt ? new Date(item.hubVerifiedAt).toLocaleString() : "—"}</p>
+                                  </div>
+
+                                  {/* Boxes */}
+                                  <div className="text-sm">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                                      Boxes{item.boxes?.length ? ` (${item.boxes.length})` : ""}
+                                    </p>
+                                    {item.boxes?.length ? (
+                                      <>
+                                        <p className="text-[11px] text-muted-foreground font-mono mb-1">{item.boxes[0].transactionNo}</p>
+                                        <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                                          {item.boxes.map((b) => (
+                                            <div key={b.boxId} className="flex items-center justify-between gap-2 rounded border border-border px-2 py-1">
+                                              <span className="font-mono text-xs font-semibold">{b.boxId}</span>
+                                              <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                                                {b.netWeightKg != null ? `${b.netWeightKg} kg · ` : ""}Box {b.boxSeq}/{b.boxCount}
+                                              </span>
+                                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full border capitalize whitespace-nowrap ${
+                                                b.status === "acknowledged" ? "bg-green-50 text-green-700 border-green-200"
+                                                : b.status === "printed" ? "bg-blue-50 text-blue-700 border-blue-200"
+                                                : "bg-amber-50 text-amber-700 border-amber-200"
+                                              }`}>{b.status.replace("_", " ")}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <p className="text-muted-foreground text-xs">No boxes (verified before box tracking).</p>
+                                    )}
+                                  </div>
+
+                                  {/* Chain of custody */}
+                                  <div className="text-sm">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Chain of custody</p>
+                                    {item.traceability?.length ? (
+                                      <ol className="space-y-1.5">
+                                        {item.traceability.map((t, idx) => (
+                                          <li key={idx} className="flex gap-2">
+                                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                                            <span className="text-xs">
+                                              <span className="capitalize font-medium">{(t.action || "").replace(/_/g, " ")}</span>
+                                              {t.actorName ? ` · ${t.actorName}` : ""}
+                                              {t.timestamp ? (
+                                                <span className="block text-[10px] text-muted-foreground">{new Date(t.timestamp).toLocaleString()}</span>
+                                              ) : null}
+                                            </span>
+                                          </li>
+                                        ))}
+                                      </ol>
+                                    ) : (
+                                      <p className="text-muted-foreground text-xs">No history.</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
