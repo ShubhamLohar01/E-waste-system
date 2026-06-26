@@ -35,6 +35,7 @@ router.get('/incoming', verifyAuth, requireRole('hub'), (req, res) => {
           collectorName: collector?.name || 'Unknown',
           collectorPhone: collector?.phone || '',
           sourceUserName: sourceUser?.name || 'Unknown',
+          pendingBoxCount: boxes.filter((b) => b.inventoryId === item._id && b.status === 'pending_print').length,
         };
       });
     res.json({ incomingItems, total: incomingItems.length });

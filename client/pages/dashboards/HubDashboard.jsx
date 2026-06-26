@@ -103,7 +103,7 @@ export default function HubDashboard() {
     setVerifyCondition(item.condition || "good");
     setVerifyCategory(item.category);
     setStaged(null);
-    setVerifyBoxCount(1);
+    setVerifyBoxCount(item.pendingBoxCount > 0 ? item.pendingBoxCount : 1);
     setVerifyDialog(true);
   };
 
@@ -451,7 +451,13 @@ export default function HubDashboard() {
       </main>
 
       {/* Verify Dialog */}
-      <Dialog open={verifyDialog} onOpenChange={setVerifyDialog}>
+      <Dialog
+        open={verifyDialog}
+        onOpenChange={(open) => {
+          setVerifyDialog(open);
+          if (!open) { setSelectedItem(null); setStaged(null); }
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
@@ -540,18 +546,25 @@ export default function HubDashboard() {
                   </Button>
                 </div>
               ) : (
-                <Button
-                  onClick={handleVerify}
-                  disabled={actionLoading === selectedItem._id}
-                  className="w-full gap-2"
-                >
-                  {actionLoading === selectedItem._id ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4" />
+                <div className="space-y-2">
+                  {selectedItem.status === "pending_print" && (
+                    <p className="text-xs text-amber-700">
+                      {verifyBoxCount} box{verifyBoxCount > 1 ? "es" : ""} already staged — click below to view and print them.
+                    </p>
                   )}
-                  Stage &amp; preview box stickers
-                </Button>
+                  <Button
+                    onClick={handleVerify}
+                    disabled={actionLoading === selectedItem._id}
+                    className="w-full gap-2"
+                  >
+                    {actionLoading === selectedItem._id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    Stage &amp; preview box stickers
+                  </Button>
+                </div>
               )}
             </div>
           )}
