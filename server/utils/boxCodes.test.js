@@ -1,0 +1,42 @@
+import { describe, it, expect } from 'vitest';
+import {
+  formatTransactionNo,
+  generateTransactionNo,
+  makeBoxId,
+  generateBoxPrefix,
+} from './boxCodes.js';
+
+describe('transaction number', () => {
+  it('formats a date as TR-YYYYMMDDHHMMSS (local components)', () => {
+    // June = month index 5
+    expect(formatTransactionNo(new Date(2026, 5, 26, 14, 30, 0))).toBe('TR-20260626143000');
+  });
+
+  it('returns the base when free', () => {
+    expect(generateTransactionNo([], new Date(2026, 5, 26, 14, 30, 0))).toBe('TR-20260626143000');
+  });
+
+  it('appends -2 on a same-second collision', () => {
+    expect(
+      generateTransactionNo(['TR-20260626143000'], new Date(2026, 5, 26, 14, 30, 0)),
+    ).toBe('TR-20260626143000-2');
+  });
+});
+
+describe('box id', () => {
+  it('zero-pads the sequence to 4 digits', () => {
+    expect(makeBoxId('ABC', 1)).toBe('BI-ABC0001');
+    expect(makeBoxId('ABC', 12)).toBe('BI-ABC0012');
+  });
+
+  it('picks 3 letters whose BI-XXX0001 is free', () => {
+    expect(generateBoxPrefix([], () => 0)).toBe('AAA');
+  });
+
+  it('retries when the prefix is taken', () => {
+    const seq = [0, 0, 0, 0.99, 0.99, 0.99]; // AAA (taken) then ZZZ (free)
+    let i = 0;
+    const rng = () => seq[i++];
+    expect(generateBoxPrefix(['BI-AAA0001'], rng)).toBe('ZZZ');
+  });
+});
