@@ -44,7 +44,8 @@ export default function HubDashboard() {
   const [verifyWeight, setVerifyWeight] = useState("");
   const [verifyCondition, setVerifyCondition] = useState("good");
   const [verifyCategory, setVerifyCategory] = useState("");
-  const [staged, setStaged] = useState(null);     // prepare response: { boxes, transactionNo, item }
+  const [staged, setStaged] = useState(null);     // prepare response: { boxes, transactionNo, item } -> drives the inline print panel
+  const [printed, setPrinted] = useState(false);  // hub clicked "Print all" for the staged boxes
   const [verifyBoxCount, setVerifyBoxCount] = useState(1);
   const [flagDialog, setFlagDialog] = useState(false);
   const [flagReason, setFlagReason] = useState("");
@@ -103,6 +104,7 @@ export default function HubDashboard() {
     setVerifyCondition(item.condition || "good");
     setVerifyCategory(item.category);
     setStaged(null);
+    setPrinted(false);
     setVerifyBoxCount(item.pendingBoxCount > 0 ? item.pendingBoxCount : 1);
     setVerifyDialog(true);
   };
@@ -126,6 +128,8 @@ export default function HubDashboard() {
       if (res.ok) {
         const data = await res.json();
         setStaged(data);
+        setPrinted(false);
+        setVerifyDialog(false); // close the form; the inline print panel takes over
         await fetchData();
       } else {
         const data = await res.json();
@@ -139,22 +143,31 @@ export default function HubDashboard() {
   };
 
   const handleConfirmPrint = useCallback(async () => {
-    if (!selectedItem) return;
+    if (!staged?.item?._id) return;
     try {
       const res = await apiFetch("/api/hub/confirm-print", {
         method: "POST",
-        body: JSON.stringify({ inventoryId: selectedItem._id }),
+        body: JSON.stringify({ inventoryId: staged.item._id }),
       });
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || "Failed to confirm print");
+        alert(data.error || "Failed to verify");
         return;
       }
+      setStaged(null);
+      setPrinted(false);
       await fetchData();
     } catch {
-      alert("Failed to confirm print");
+      alert("Failed to verify");
     }
-  }, [apiFetch, selectedItem, fetchData]);
+  }, [apiFetch, staged, fetchData]);
+
+  // Dismiss the staged panel without verifying; the boxes stay pending_print and
+  // the item remains resumable from the incoming list ("Finish printing").
+  const discardStaged = () => {
+    setStaged(null);
+    setPrinted(false);
+  };
 
   const openFlagDialog = (item) => {
     setSelectedItem(item);
@@ -249,6 +262,43 @@ export default function HubDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Staged boxes — print, then verify (moves the item to Verified Inventory) */}
+        {staged && (
+          <section className="mb-8 rounded-lg border-2 border-amber-300 bg-amber-50/60 p-5">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-amber-600" />
+                  Print &amp; verify — {staged.item?.category}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {(staged.boxes || []).length} box{(staged.boxes || []).length > 1 ? "es" : ""} · Txn {staged.transactionNo}.
+                  Print the QR stickers first, then verify to move this item to Verified Inventory.
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={discardStaged} className="text-muted-foreground">
+                Cancel
+              </Button>
+            </div>
+
+            <BoxStickerSheet boxes={staged.boxes || []} onPrint={() => setPrinted(true)} />
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Button
+                onClick={handleConfirmPrint}
+                disabled={!printed}
+                className="gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Verify &amp; move to inventory
+              </Button>
+              {!printed && (
+                <span className="text-xs text-amber-700">Print the QR stickers to enable verification.</span>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* Welcome */}
         <section className="mb-10">
           <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-lg p-8">
@@ -455,7 +505,7 @@ export default function HubDashboard() {
         open={verifyDialog}
         onOpenChange={(open) => {
           setVerifyDialog(open);
-          if (!open) { setSelectedItem(null); setStaged(null); }
+          if (!open) setSelectedItem(null);
         }}
       >
         <DialogContent className="max-w-lg">
@@ -525,47 +575,30 @@ export default function HubDashboard() {
                     min="1"
                     value={verifyBoxCount}
                     onChange={(e) => setVerifyBoxCount(Math.max(1, parseInt(e.target.value) || 1))}
-                    disabled={!!staged}
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none disabled:opacity-60"
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none"
                   />
                 </div>
               </div>
 
-              {staged ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-amber-700 flex items-center gap-2">
-                    <Clock className="w-4 h-4" /> Staged. Click <strong>Print all</strong> to print every box and complete verification.
+              <div className="space-y-2">
+                {selectedItem.status === "pending_print" && (
+                  <p className="text-xs text-amber-700">
+                    {verifyBoxCount} box{verifyBoxCount > 1 ? "es" : ""} already staged — submit to preview &amp; print them.
                   </p>
-                  <BoxStickerSheet boxes={staged.boxes || []} onPrint={handleConfirmPrint} />
-                  <Button
-                    variant="outline"
-                    onClick={() => { setVerifyDialog(false); setSelectedItem(null); setStaged(null); }}
-                    className="w-full"
-                  >
-                    Done
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {selectedItem.status === "pending_print" && (
-                    <p className="text-xs text-amber-700">
-                      {verifyBoxCount} box{verifyBoxCount > 1 ? "es" : ""} already staged — click below to view and print them.
-                    </p>
+                )}
+                <Button
+                  onClick={handleVerify}
+                  disabled={actionLoading === selectedItem._id}
+                  className="w-full gap-2"
+                >
+                  {actionLoading === selectedItem._id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4" />
                   )}
-                  <Button
-                    onClick={handleVerify}
-                    disabled={actionLoading === selectedItem._id}
-                    className="w-full gap-2"
-                  >
-                    {actionLoading === selectedItem._id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4" />
-                    )}
-                    Stage &amp; preview box stickers
-                  </Button>
-                </div>
-              )}
+                  Submit
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
