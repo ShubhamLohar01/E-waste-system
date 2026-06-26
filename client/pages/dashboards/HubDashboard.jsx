@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import NotificationsBell from "@/components/NotificationsBell";
-import QRSticker from "@/components/QRSticker";
+import BoxStickerSheet from "@/components/BoxStickerSheet";
 import { api } from "@/lib/api";
 import { Coins } from "lucide-react";
 import RaiseDisputeDialog from "@/components/RaiseDisputeDialog";
@@ -44,7 +44,8 @@ export default function HubDashboard() {
   const [verifyWeight, setVerifyWeight] = useState("");
   const [verifyCondition, setVerifyCondition] = useState("good");
   const [verifyCategory, setVerifyCategory] = useState("");
-  const [lastSticker, setLastSticker] = useState(null);
+  const [staged, setStaged] = useState(null);     // prepare response: { boxes, transactionNo, item }
+  const [verifyBoxCount, setVerifyBoxCount] = useState(1);
   const [flagDialog, setFlagDialog] = useState(false);
   const [flagReason, setFlagReason] = useState("");
 
@@ -101,7 +102,8 @@ export default function HubDashboard() {
     setVerifyWeight(item.weightKg != null ? String(item.weightKg) : "");
     setVerifyCondition(item.condition || "good");
     setVerifyCategory(item.category);
-    setLastSticker(null);
+    setStaged(null);
+    setVerifyBoxCount(1);
     setVerifyDialog(true);
   };
 
@@ -117,12 +119,13 @@ export default function HubDashboard() {
           weightKg: verifyWeight === "" ? null : Number(verifyWeight),
           condition: verifyCondition,
           category: verifyCategory,
+          boxCount: verifyBoxCount,
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        setLastSticker(data.sticker || null);
+        setStaged(data);
         await fetchData();
       } else {
         const data = await res.json();
@@ -134,6 +137,24 @@ export default function HubDashboard() {
       setActionLoading(null);
     }
   };
+
+  const handleConfirmPrint = useCallback(async () => {
+    if (!selectedItem) return;
+    try {
+      const res = await apiFetch("/api/hub/confirm-print", {
+        method: "POST",
+        body: JSON.stringify({ inventoryId: selectedItem._id }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to confirm print");
+        return;
+      }
+      await fetchData();
+    } catch {
+      alert("Failed to confirm print");
+    }
+  }, [apiFetch, selectedItem, fetchData]);
 
   const openFlagDialog = (item) => {
     setSelectedItem(item);
@@ -356,10 +377,17 @@ export default function HubDashboard() {
                   )}
 
                   <div className="flex gap-3 flex-wrap">
-                    <Button onClick={() => openVerifyDialog(item)} className="gap-2">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Verify Item
-                    </Button>
+                    {item.status === "pending_print" ? (
+                      <Button onClick={() => openVerifyDialog(item)} className="gap-2 bg-amber-600 hover:bg-amber-700">
+                        <Clock className="w-4 h-4" />
+                        Finish printing
+                      </Button>
+                    ) : (
+                      <Button onClick={() => openVerifyDialog(item)} className="gap-2">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Verify Item
+                      </Button>
+                    )}
                     <Button variant="outline" onClick={() => openFlagDialog(item)} className="gap-2 text-yellow-700 border-yellow-200 hover:bg-yellow-50">
                       <AlertTriangle className="w-4 h-4" />
                       Flag Issue
@@ -484,23 +512,31 @@ export default function HubDashboard() {
                     className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Number of boxes</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={verifyBoxCount}
+                    onChange={(e) => setVerifyBoxCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    disabled={!!staged}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none disabled:opacity-60"
+                  />
+                </div>
               </div>
 
-              {lastSticker ? (
+              {staged ? (
                 <div className="space-y-3">
-                  <p className="text-sm font-medium text-green-700 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" /> Verified! Print the sticker and stick it on the item.
+                  <p className="text-sm font-medium text-amber-700 flex items-center gap-2">
+                    <Clock className="w-4 h-4" /> Staged. Click <strong>Print all</strong> to print every box and complete verification.
                   </p>
-                  <QRSticker
-                    qrCode={lastSticker.qrCode}
-                    category={lastSticker.category}
-                    qty={lastSticker.actualQty}
-                    unit={lastSticker.unit}
-                    weightKg={lastSticker.weightKg}
-                    hubName={lastSticker.hubName}
-                  />
-                  <Button variant="outline" onClick={() => { setVerifyDialog(false); setSelectedItem(null); setLastSticker(null); }} className="w-full">
-                    Close
+                  <BoxStickerSheet boxes={staged.boxes || []} onPrint={handleConfirmPrint} />
+                  <Button
+                    variant="outline"
+                    onClick={() => { setVerifyDialog(false); setSelectedItem(null); setStaged(null); }}
+                    className="w-full"
+                  >
+                    Done
                   </Button>
                 </div>
               ) : (
@@ -514,7 +550,7 @@ export default function HubDashboard() {
                   ) : (
                     <CheckCircle2 className="w-4 h-4" />
                   )}
-                  Confirm Verification &amp; Generate QR Sticker
+                  Stage &amp; preview box stickers
                 </Button>
               )}
             </div>
