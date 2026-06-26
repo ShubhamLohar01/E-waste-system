@@ -84,6 +84,7 @@ export default function RecyclerDashboard() {
     setAckBusy(boxId || qrPayload);
     try {
       const res = await api.post('/api/recycler/acknowledge', { scannedQr: qrPayload });
+      if (!boxId) setAckPaste(''); // paste path: clear the field only after a successful ack
       if (res?.complete) alert('All boxes acknowledged — item marked received.');
       await refresh();
     } catch (err) {
@@ -357,6 +358,7 @@ export default function RecyclerDashboard() {
 
             <div className="mb-4 flex gap-2 max-w-md">
               <input
+                aria-label="Paste a scanned box QR code"
                 value={ackPaste}
                 onChange={(e) => setAckPaste(e.target.value)}
                 placeholder="Paste a scanned box QR…"
@@ -365,7 +367,7 @@ export default function RecyclerDashboard() {
               <Button
                 variant="outline"
                 disabled={!ackPaste.trim() || !!ackBusy}
-                onClick={() => { acknowledgeBox(ackPaste.trim()); setAckPaste(''); }}
+                onClick={() => acknowledgeBox(ackPaste.trim())}
               >
                 Acknowledge
               </Button>
@@ -401,7 +403,7 @@ export default function RecyclerDashboard() {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={ackBusy === b.boxId}
+                            disabled={!!ackBusy}
                             onClick={() => acknowledgeBox(b.qrPayload, b.boxId)}
                           >
                             {ackBusy === b.boxId ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Scan / Confirm'}
