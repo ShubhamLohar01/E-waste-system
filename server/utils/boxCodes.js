@@ -19,7 +19,11 @@ export function formatTransactionNo(date = new Date()) {
   );
 }
 
-/** Unique transaction number; appends -2, -3… on a same-second collision. */
+/**
+ * Unique transaction number; appends -2, -3… on a same-second collision.
+ * Uses local time — the caller must pass all existing transaction numbers so
+ * uniqueness holds even across a DST fallback (same local second occurring twice).
+ */
 export function generateTransactionNo(existing = [], date = new Date()) {
   const base = formatTransactionNo(date);
   const taken = new Set(existing);
@@ -40,6 +44,7 @@ export function generateBoxPrefix(existingBoxIds = [], rng = Math.random) {
   const letter = () => String.fromCharCode(65 + Math.floor(rng() * 26));
   for (let attempt = 0; attempt < 1000; attempt++) {
     const prefix = letter() + letter() + letter();
+    // Each transaction numbers its boxes from 0001, so a free BI-<prefix>0001 guarantees the whole prefix is free.
     if (!taken.has(makeBoxId(prefix, 1))) return prefix;
   }
   throw new Error('Could not allocate a free box prefix');
@@ -55,6 +60,8 @@ export function boxQrPayload(transactionNo, boxId) {
 /** { transactionNo, boxId } when the signature is valid, else null. */
 export function verifyBoxQr(payload) {
   if (typeof payload !== 'string') return null;
+  // Payload format: BOX.<transactionNo>.<boxId>.<sig12>
+  // Neither transactionNo (TR-... or TR-...-N) nor boxId (BI-...) ever contains a '.', so split gives exactly 4 parts.
   const parts = payload.split('.');
   if (parts.length !== 4 || parts[0] !== 'BOX') return null;
   const [, transactionNo, boxId, sig] = parts;

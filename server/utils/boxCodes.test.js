@@ -24,6 +24,15 @@ describe('transaction number', () => {
       generateTransactionNo(['TR-20260626143000'], new Date(2026, 5, 26, 14, 30, 0)),
     ).toBe('TR-20260626143000-2');
   });
+
+  it('increments to -3 when both base and -2 are taken', () => {
+    expect(
+      generateTransactionNo(
+        ['TR-20260626143000', 'TR-20260626143000-2'],
+        new Date(2026, 5, 26, 14, 30, 0),
+      ),
+    ).toBe('TR-20260626143000-3');
+  });
 });
 
 describe('box id', () => {
