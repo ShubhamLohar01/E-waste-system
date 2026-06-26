@@ -73,3 +73,16 @@ export function verifyBoxQr(payload) {
   }
   return valid ? { transactionNo, boxId } : null;
 }
+
+/** Split a total weight into `count` per-box weights summing to the total (2dp). */
+export function splitNetWeight(totalKg, count) {
+  const n = Math.max(1, Math.floor(count) || 1);
+  if (totalKg == null || totalKg === '' || isNaN(Number(totalKg))) {
+    return Array.from({ length: n }, () => null);
+  }
+  const total = Number(totalKg);
+  const per = Math.floor((total / n) * 100) / 100;
+  const weights = Array.from({ length: n }, () => per);
+  weights[n - 1] = Math.round((total - per * (n - 1)) * 100) / 100;
+  return weights;
+}

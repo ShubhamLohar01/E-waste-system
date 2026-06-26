@@ -6,6 +6,7 @@ import {
   generateBoxPrefix,
   boxQrPayload,
   verifyBoxQr,
+  splitNetWeight,
 } from './boxCodes.js';
 
 describe('transaction number', () => {
@@ -59,5 +60,24 @@ describe('box QR payload', () => {
     expect(verifyBoxQr('garbage')).toBeNull();
     expect(verifyBoxQr('BOX.a.b')).toBeNull(); // too few parts
     expect(verifyBoxQr(null)).toBeNull();
+  });
+});
+
+describe('splitNetWeight', () => {
+  it('splits evenly when divisible', () => {
+    expect(splitNetWeight(12, 3)).toEqual([4, 4, 4]);
+  });
+
+  it('puts the rounding remainder on the last box', () => {
+    expect(splitNetWeight(10, 3)).toEqual([3.33, 3.33, 3.34]);
+  });
+
+  it('returns nulls when no weight was entered', () => {
+    expect(splitNetWeight(null, 2)).toEqual([null, null]);
+    expect(splitNetWeight('', 2)).toEqual([null, null]);
+  });
+
+  it('handles a single box', () => {
+    expect(splitNetWeight(7.5, 1)).toEqual([7.5]);
   });
 });
