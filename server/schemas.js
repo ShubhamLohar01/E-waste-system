@@ -39,6 +39,13 @@ export const intentSchema = z.object({
         estimatedQty: z.number().positive().max(10_000),
         unit: z.string().max(20),
         photos: z.array(z.string()).optional().default([]),
+        invoice: z
+          .object({
+            name: z.string().max(255).optional().default(''),
+            dataUrl: z.string(),
+          })
+          .nullable()
+          .optional(),
         condition: z.string().max(50).optional(),
         purchaseDate: z.string().max(30).optional(),
       })
@@ -55,6 +62,15 @@ export const hubVerifySchema = z.object({
   condition: z.string().max(50).optional(),
   category: z.string().max(100).optional(),
   photos: z.array(z.string()).optional(),
+  boxCount: z.number().int().positive().max(1000).optional().default(1),
+});
+
+export const confirmPrintSchema = z.object({
+  inventoryId: z.string().min(1),
+});
+
+export const acknowledgeBoxSchema = z.object({
+  scannedQr: z.string().min(1),
 });
 
 export const markPaymentSchema = z.object({
@@ -72,6 +88,14 @@ export const assignRecyclerSchema = z.object({
 export const assignDeliverySchema = z.object({
   inventoryIds: z.array(z.string().min(1)).min(1).max(500),
   deliveryWorkerId: z.string().min(1),
+});
+
+export const recyclerRequestSchema = z.object({
+  category: z.string().min(1).max(100),
+  quantity: z.number().positive().max(10_000_000),
+  unit: z.string().max(20).optional().default('kg'),
+  note: z.string().max(1000).optional(),
+  targetDate: z.string().max(30).optional(),
 });
 
 export const disputeCreateSchema = z.object({
