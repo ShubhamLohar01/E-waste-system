@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Package, LogOut, Factory, Truck, Loader2, CheckCircle2, Boxes, Clock, Building2, Phone, MapPin, Check, Weight,
+  ClipboardList, Plus, Send, Ban,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,32 +13,95 @@ import { api } from '@/lib/api';
 import NotificationsBell from '@/components/NotificationsBell';
 import RaiseDisputeDialog from '@/components/RaiseDisputeDialog';
 
+const REQUEST_CATEGORIES = [
+  'Old Laptops', 'Mobile Phones', 'Electronic Cables', 'Monitors',
+  'Batteries', 'Circuit Boards', 'Printers', 'Keyboards & Mouse', 'Other',
+];
+const emptyReqForm = () => ({ category: REQUEST_CATEGORIES[0], quantity: 10, unit: 'kg', note: '', targetDate: '' });
+
 export default function RecyclerDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [agents, setAgents] = useState([]);
   const [deliveries, setDeliveries] = useState([]);
+  const [boxGroups, setBoxGroups] = useState([]);
+  const [ackBusy, setAckBusy] = useState(null); // boxId currently being acknowledged
+  const [ackPaste, setAckPaste] = useState('');
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [agentId, setAgentId] = useState('');
   const [busy, setBusy] = useState(false);
+  const [requests, setRequests] = useState([]);
+  const [reqDialogOpen, setReqDialogOpen] = useState(false);
+  const [reqForm, setReqForm] = useState(emptyReqForm);
+  const [reqBusy, setReqBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const [o, a, d] = await Promise.all([
+      const [o, a, d, r, b] = await Promise.all([
         api.get('/api/recycler/orders'),
         api.get('/api/recycler/delivery-agents'),
         api.get('/api/recycler/deliveries'),
+        api.get('/api/recycler/requests'),
+        api.get('/api/recycler/boxes'),
       ]);
       setOrders(o?.items || []);
       setAgents(a?.agents || []);
       setDeliveries(d?.deliveries || []);
+      setRequests(r?.requests || []);
+      setBoxGroups(b?.items || []);
     } catch (err) {
       console.error(err);
     }
   }, []);
+
+  const submitRequest = async () => {
+    if (!reqForm.category || !reqForm.quantity || Number(reqForm.quantity) < 1) {
+      return alert('Pick a category and a quantity of at least 1.');
+    }
+    setReqBusy(true);
+    try {
+      await api.post('/api/recycler/requests', {
+        category: reqForm.category,
+        quantity: Number(reqForm.quantity),
+        unit: reqForm.unit,
+        note: reqForm.note || undefined,
+        targetDate: reqForm.targetDate || undefined,
+      });
+      setReqDialogOpen(false);
+      setReqForm(emptyReqForm());
+      await refresh();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setReqBusy(false);
+    }
+  };
+
+  const acknowledgeBox = async (qrPayload, boxId) => {
+    setAckBusy(boxId || qrPayload);
+    try {
+      const res = await api.post('/api/recycler/acknowledge', { scannedQr: qrPayload });
+      if (res?.complete) alert('All boxes acknowledged — item marked received.');
+      await refresh();
+    } catch (err) {
+      alert(err?.message || 'Could not acknowledge this box.');
+    } finally {
+      setAckBusy(null);
+    }
+  };
+
+  const cancelRequest = async (id) => {
+    if (!confirm('Cancel this request?')) return;
+    try {
+      await api.post(`/api/recycler/requests/${id}/cancel`);
+    } catch (err) {
+      alert(err.message);
+    }
+    await refresh();
+  };
 
   useEffect(() => {
     (async () => {
@@ -140,6 +204,61 @@ export default function RecyclerDashboard() {
           <Stat label="Total orders" value={orders.length} icon={<Boxes className="w-5 h-5 text-primary" />} />
         </section>
 
+        {/* Material requests to admin */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-bold">My material requests</h2>
+              <p className="text-sm text-muted-foreground">
+                Tell admin what you need. Admin sources it from hubs — hub identities stay private.
+              </p>
+            </div>
+            <Button onClick={() => setReqDialogOpen(true)} className="gap-2">
+              <Plus className="w-4 h-4" /> Raise request
+            </Button>
+          </div>
+
+          {requests.length === 0 ? (
+            <div className="p-8 rounded-lg border border-dashed text-center text-muted-foreground">
+              <ClipboardList className="w-8 h-8 mx-auto mb-2" />
+              No requests yet. Raise one to tell admin which category & quantity you need.
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">Request</th>
+                    <th className="px-3 py-2 text-left font-semibold">Category</th>
+                    <th className="px-3 py-2 text-left font-semibold">Quantity</th>
+                    <th className="px-3 py-2 text-left font-semibold">Allocated</th>
+                    <th className="px-3 py-2 text-left font-semibold">Status</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {requests.map((r) => (
+                    <tr key={r._id} className="hover:bg-muted/20">
+                      <td className="px-3 py-2 font-mono text-xs">{r._id}</td>
+                      <td className="px-3 py-2 font-medium">{r.category}</td>
+                      <td className="px-3 py-2">{r.quantity} {r.unit}</td>
+                      <td className="px-3 py-2">{r.allocatedCount || 0} item(s)</td>
+                      <td className="px-3 py-2"><RequestStatus status={r.status} /></td>
+                      <td className="px-3 py-2 text-right">
+                        {r.status === 'pending' && (
+                          <Button variant="ghost" size="sm" onClick={() => cancelRequest(r._id)} className="gap-1 text-destructive">
+                            <Ban className="w-3.5 h-3.5" /> Cancel
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold">Assigned to you (awaiting pickup)</h2>
@@ -180,7 +299,7 @@ export default function RecyclerDashboard() {
                       <td className="px-3 py-2 font-medium">{it.category}</td>
                       <td className="px-3 py-2">{it.actualQty} {it.unit}</td>
                       <td className="px-3 py-2">{it.weightKg != null ? `${it.weightKg} kg` : '—'}</td>
-                      <td className="px-3 py-2">{it.hubName || '—'}<br /><span className="text-xs text-muted-foreground">{it.hubAddress}</span></td>
+                      <td className="px-3 py-2 font-mono text-xs">{it.hubCode || '—'}</td>
                       <td className="px-3 py-2 font-mono text-xs">{it.qrCode.slice(0, 14)}…</td>
                     </tr>
                   ))}
@@ -201,7 +320,7 @@ export default function RecyclerDashboard() {
               {deliveries.map((d) => (
                 <div key={d._id} className="p-4 rounded-lg border border-border bg-card">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="font-semibold">From {d.hubName}</p>
+                    <p className="font-semibold">From hub <span className="font-mono text-sm">{d.hubCode || '—'}</span></p>
                     <span className="px-2 py-0.5 rounded-full text-xs border capitalize bg-muted/40">
                       {d.status.replace('_', ' ')}
                     </span>
@@ -228,6 +347,74 @@ export default function RecyclerDashboard() {
             </div>
           )}
         </section>
+
+        {boxGroups.length > 0 && (
+          <section className="mt-8">
+            <h2 className="text-xl font-bold mb-1">Acknowledge receipt — scan boxes</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Scan each box's QR (or tap Confirm) as it arrives. The item is marked received once every box is acknowledged.
+            </p>
+
+            <div className="mb-4 flex gap-2 max-w-md">
+              <input
+                value={ackPaste}
+                onChange={(e) => setAckPaste(e.target.value)}
+                placeholder="Paste a scanned box QR…"
+                className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm"
+              />
+              <Button
+                variant="outline"
+                disabled={!ackPaste.trim() || !!ackBusy}
+                onClick={() => { acknowledgeBox(ackPaste.trim()); setAckPaste(''); }}
+              >
+                Acknowledge
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              {boxGroups.map((g) => (
+                <div key={g.inventoryId} className="rounded-lg border border-border p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-semibold text-foreground">{g.itemName}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{g.transactionNo}</p>
+                    </div>
+                    <span className={`text-sm font-semibold ${g.acknowledged === g.total ? 'text-green-600' : 'text-amber-600'}`}>
+                      {g.acknowledged} / {g.total} acknowledged
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {g.boxes.map((b) => (
+                      <div key={b.boxId} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-mono font-semibold truncate">{b.boxId}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Box {b.boxSeq} of {b.boxCount}
+                            {b.netWeightKg != null ? ` · ${b.netWeightKg} kg` : ''}
+                          </p>
+                        </div>
+                        {b.status === 'acknowledged' ? (
+                          <span className="text-green-600 inline-flex items-center gap-1 text-sm">
+                            <Check className="w-4 h-4" /> Done
+                          </span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={ackBusy === b.boxId}
+                            onClick={() => acknowledgeBox(b.qrPayload, b.boxId)}
+                          >
+                            {ackBusy === b.boxId ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Scan / Confirm'}
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -238,8 +425,7 @@ export default function RecyclerDashboard() {
               .filter(Boolean);
             const totalWeightKg = selectedItems.reduce((sum, it) => sum + (Number(it.weightKg) || 0), 0);
             const totalQty = selectedItems.reduce((sum, it) => sum + (Number(it.actualQty) || 0), 0);
-            const pickupHubName = selectedItems[0]?.hubName || '—';
-            const pickupHubAddress = selectedItems[0]?.hubAddress || '';
+            const pickupHubCode = selectedItems[0]?.hubCode || '—';
             const chosenAgent = agents.find((a) => a._id === agentId);
 
             const reliabilityClasses = (score) => {
@@ -285,14 +471,10 @@ export default function RecyclerDashboard() {
                       <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1">
                         <Building2 className="w-3 h-3" /> Pickup hub
                       </p>
-                      <p className="text-sm font-semibold text-foreground truncate" title={pickupHubName}>
-                        {pickupHubName}
+                      <p className="text-sm font-semibold text-foreground font-mono truncate" title={pickupHubCode}>
+                        {pickupHubCode}
                       </p>
-                      {pickupHubAddress && (
-                        <p className="text-[11px] text-muted-foreground truncate" title={pickupHubAddress}>
-                          {pickupHubAddress}
-                        </p>
-                      )}
+                      <p className="text-[11px] text-muted-foreground">admin-arranged pickup</p>
                     </div>
                   </div>
                 </div>
@@ -405,7 +587,96 @@ export default function RecyclerDashboard() {
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* Raise material request dialog */}
+      <Dialog open={reqDialogOpen} onOpenChange={setReqDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-primary" /> Raise material request
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Category</label>
+                <select
+                  value={reqForm.category}
+                  onChange={(e) => setReqForm((f) => ({ ...f, category: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                >
+                  {REQUEST_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Quantity</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={reqForm.quantity}
+                  onChange={(e) => setReqForm((f) => ({ ...f, quantity: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Unit</label>
+                <select
+                  value={reqForm.unit}
+                  onChange={(e) => setReqForm((f) => ({ ...f, unit: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                >
+                  <option value="kg">kg</option>
+                  <option value="pieces">pieces</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Needed by (optional)</label>
+                <input
+                  type="date"
+                  value={reqForm.targetDate}
+                  onChange={(e) => setReqForm((f) => ({ ...f, targetDate: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Note (optional)</label>
+              <textarea
+                rows={2}
+                value={reqForm.note}
+                onChange={(e) => setReqForm((f) => ({ ...f, note: e.target.value }))}
+                placeholder="Any quality / spec details for the admin"
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+              />
+            </div>
+            <Button onClick={submitRequest} disabled={reqBusy} className="w-full gap-2">
+              {reqBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Submit to admin
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+const REQUEST_STATUS_STYLES = {
+  pending: 'bg-amber-100 text-amber-800 border-amber-200',
+  approved: 'bg-blue-100 text-blue-800 border-blue-200',
+  partially_approved: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+  fulfilled: 'bg-green-100 text-green-800 border-green-200',
+  rejected: 'bg-red-100 text-red-800 border-red-200',
+  cancelled: 'bg-gray-100 text-gray-700 border-gray-200',
+};
+
+function RequestStatus({ status }) {
+  const cls = REQUEST_STATUS_STYLES[status] || 'bg-muted text-foreground border-border';
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border capitalize ${cls}`}>
+      {String(status || '').replace(/_/g, ' ')}
+    </span>
   );
 }
 
