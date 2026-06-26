@@ -2,8 +2,17 @@ import { Router } from 'express';
 import { inventory } from '../models/Inventory';
 import { users } from '../models/User';
 import { verifyAuth, requireRole } from '../middleware/auth';
+import { maskCode } from '../utils/helpers.js';
 import { notify } from '../services/notificationService.js';
-import { validate, hubVerifySchema } from '../schemas.js';
+import { validate, hubVerifySchema, confirmPrintSchema } from '../schemas.js';
+import { boxes } from '../models/Box';
+import {
+  generateTransactionNo,
+  generateBoxPrefix,
+  makeBoxId,
+  boxQrPayload,
+  splitNetWeight,
+} from '../utils/boxCodes.js';
 
 const router = Router();
 
@@ -13,7 +22,11 @@ const router = Router();
 router.get('/incoming', verifyAuth, requireRole('hub'), (req, res) => {
   try {
     const incomingItems = inventory
-      .filter((i) => i.status === 'at_hub' && (!i.hubId || i.hubId === req.user.id))
+      .filter(
+        (i) =>
+          (i.status === 'at_hub' && (!i.hubId || i.hubId === req.user.id)) ||
+          (i.status === 'pending_print' && i.hubId === req.user.id),
+      )
       .map((item) => {
         const collector = item.collectorId ? users.find((u) => u._id === item.collectorId) : null;
         const sourceUser = users.find((u) => u._id === item.sourceUserId);
@@ -31,29 +44,115 @@ router.get('/incoming', verifyAuth, requireRole('hub'), (req, res) => {
 });
 
 /**
- * POST /api/hub/verify — hub records actual qty + weight, produces QR sticker data
+ * POST /api/hub/verify — STAGE for printing. Records actual qty/weight/condition,
+ * sets the item to pending_print, and creates the box rows for preview.
+ * The item is NOT verified until /confirm-print is called.
  */
 router.post('/verify', verifyAuth, requireRole('hub'), validate(hubVerifySchema), (req, res) => {
   try {
-    const { inventoryId, actualQty, weightKg, condition, category, photos } = req.body;
+    const { inventoryId, actualQty, weightKg, condition, category, photos, boxCount } = req.body;
     const item = inventory.find((i) => i._id === inventoryId);
     if (!item) return res.status(404).json({ error: 'Inventory item not found' });
+    if (item.status === 'verified') {
+      return res.status(409).json({ error: 'Item is already verified.' });
+    }
 
     const now = new Date().toISOString();
-    // Preserve the originally-claimed qty & category for audit (once)
     if (item.claimedQty == null) item.claimedQty = item.actualQty;
     if (!item.claimedCategory) item.claimedCategory = item.category;
 
     item.actualQty = Number(actualQty);
-    if (weightKg !== undefined && weightKg !== null && weightKg !== '') {
-      item.weightKg = Number(weightKg);
-    }
+    if (weightKg !== undefined && weightKg !== null && weightKg !== '') item.weightKg = Number(weightKg);
     item.condition = condition || item.condition;
     item.category = category || item.category;
     if (Array.isArray(photos)) item.verificationPhotos.push(...photos);
     item.hubId = req.user.id;
-    item.hubVerifiedAt = now;
+    item.status = 'pending_print';
+    item.updatedAt = now;
+
+    const me = users.find((u) => u._id === req.user.id);
+    const count = Math.max(1, Math.floor(Number(boxCount) || 1));
+
+    // Reuse existing pending boxes if the count is unchanged; otherwise rebuild.
+    let myBoxes = boxes.filter((b) => b.inventoryId === item._id && b.status === 'pending_print');
+    if (myBoxes.length !== count) {
+      for (let i = boxes.length - 1; i >= 0; i--) {
+        if (boxes[i].inventoryId === item._id && boxes[i].status === 'pending_print') boxes.splice(i, 1);
+      }
+      const transactionNo = generateTransactionNo(boxes.map((b) => b.transactionNo));
+      const prefix = generateBoxPrefix(boxes.map((b) => b._id));
+      const weights = splitNetWeight(item.weightKg, count);
+      myBoxes = [];
+      for (let i = 0; i < count; i++) {
+        const boxId = makeBoxId(prefix, i + 1);
+        const box = {
+          _id: boxId,
+          transactionNo,
+          inventoryId: item._id,
+          qrPayload: boxQrPayload(transactionNo, boxId),
+          itemName: item.category,
+          netWeightKg: weights[i],
+          unit: item.unit,
+          boxSeq: i + 1,
+          boxCount: count,
+          hubId: req.user.id,
+          hubName: me?.name || '',
+          status: 'pending_print',
+          recyclerId: null,
+          recyclerCompany: null,
+          acknowledgedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        };
+        boxes.push(box);
+        myBoxes.push(box);
+      }
+    }
+
+    res.json({
+      message: 'Item staged for printing',
+      item,
+      transactionNo: myBoxes[0]?.transactionNo,
+      boxes: myBoxes.map((b) => ({
+        boxId: b._id,
+        transactionNo: b.transactionNo,
+        qrPayload: b.qrPayload,
+        itemName: b.itemName,
+        netWeightKg: b.netWeightKg,
+        unit: b.unit,
+        boxSeq: b.boxSeq,
+        boxCount: b.boxCount,
+        hubName: b.hubName,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/hub/confirm-print — the hub clicked Print. Boxes -> printed,
+ * item -> verified, admins notified. This is the ONLY path to 'verified'.
+ */
+router.post('/confirm-print', verifyAuth, requireRole('hub'), validate(confirmPrintSchema), (req, res) => {
+  try {
+    const { inventoryId } = req.body;
+    const item = inventory.find((i) => i._id === inventoryId);
+    if (!item) return res.status(404).json({ error: 'Inventory item not found' });
+    if (item.hubId !== req.user.id) return res.status(403).json({ error: 'Not your item' });
+
+    const myBoxes = boxes.filter((b) => b.inventoryId === item._id && b.status === 'pending_print');
+    if (myBoxes.length === 0) {
+      return res.status(400).json({ error: 'No staged boxes to print. Stage the item first.' });
+    }
+
+    const now = new Date().toISOString();
+    myBoxes.forEach((b) => {
+      b.status = 'printed';
+      b.updatedAt = now;
+    });
     item.status = 'verified';
+    item.hubVerifiedAt = now;
     item.updatedAt = now;
 
     const me = users.find((u) => u._id === req.user.id);
@@ -62,33 +161,19 @@ router.post('/verify', verifyAuth, requireRole('hub'), validate(hubVerifySchema)
       actorName: me?.name,
       action: 'verified_at_hub',
       timestamp: now,
-      photo: Array.isArray(photos) ? photos[0] : undefined,
     });
 
-    // Notify all admins that verified items are ready to route
     const admins = users.filter((u) => u.role === 'admin');
     admins.forEach((a) =>
       notify(a._id, {
         type: 'hub_verified',
         title: 'New verified batch ready',
-        message: `${me?.name || 'A hub'} verified ${item.actualQty} × ${item.category}. Awaiting your approval to assign to a recycler.`,
+        message: `${me?.name || 'A hub'} verified ${item.actualQty} × ${item.category} (${myBoxes.length} box${myBoxes.length > 1 ? 'es' : ''}). Awaiting your approval to assign to a recycler.`,
         relatedId: item._id,
-      })
+      }),
     );
 
-    // QR sticker payload for printing
-    const sticker = {
-      qrCode: item.qrCode,
-      inventoryId: item._id,
-      category: item.category,
-      actualQty: item.actualQty,
-      unit: item.unit,
-      weightKg: item.weightKg,
-      hubName: me?.name || '',
-      verifiedAt: item.hubVerifiedAt,
-    };
-
-    res.json({ message: 'Item verified', item, sticker });
+    res.json({ message: 'Printed & verified', item, printedBoxes: myBoxes.length });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -107,11 +192,11 @@ router.get('/inventory', verifyAuth, requireRole('hub'), (req, res) => {
       )
       .map((item) => {
         const sourceUser = users.find((u) => u._id === item.sourceUserId);
-        const recycler = item.recyclerId ? users.find((u) => u._id === item.recyclerId) : null;
+        // Recycler identity hidden from hubs — only an opaque recycler code.
         return {
           ...item,
           sourceUserName: sourceUser?.name || 'Unknown',
-          recyclerName: recycler?.name || null,
+          recyclerCode: maskCode(item.recyclerId, 'REC'),
         };
       });
 
