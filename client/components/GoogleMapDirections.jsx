@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, ExternalLink, Navigation, RefreshCw } from 'lucide-react';
 import { Button } from './ui/button';
+import LeafletDirections from './LeafletDirections';
 
 /**
  * Renders a Google Maps driving-directions panel + map from `origin` (collector's
@@ -28,6 +29,8 @@ export default function GoogleMapDirections({
   const [locating, setLocating] = useState(true);
   const [error, setError] = useState(null);
   const [summary, setSummary] = useState(null);
+  // Hard failures (bad key, billing, script error) flip to the free Leaflet fallback.
+  const [mapUnavailable, setMapUnavailable] = useState(false);
 
   const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim();
 
@@ -43,7 +46,10 @@ export default function GoogleMapDirections({
       };
       window.__gmAuthFailureHooked = true;
     }
-    const onAuthFail = () => setError(window.__gmAuthFailureReason);
+    const onAuthFail = () => {
+      setError(window.__gmAuthFailureReason);
+      setMapUnavailable(true);
+    };
     window.addEventListener('gm-auth-failure', onAuthFail);
 
     if (window.google?.maps) {
@@ -61,7 +67,10 @@ export default function GoogleMapDirections({
     s.defer = true;
     s.setAttribute('data-google-maps', 'true');
     s.onload = () => setLoaded(true);
-    s.onerror = () => setError('Failed to load Google Maps (network or CORS issue).');
+    s.onerror = () => {
+      setError('Failed to load Google Maps (network or CORS issue).');
+      setMapUnavailable(true);
+    };
     document.head.appendChild(s);
     return () => window.removeEventListener('gm-auth-failure', onAuthFail);
   }, [apiKey]);
@@ -157,20 +166,15 @@ export default function GoogleMapDirections({
       ? `https://www.google.com/maps/dir/?api=1&destination=${destination.lat},${destination.lng}&travelmode=${travelMode.toLowerCase()}`
       : null;
 
-  if (!apiKey) {
+  // No key, or Google auth/load failed → free Leaflet + OSRM directions.
+  if (!apiKey || mapUnavailable) {
     return (
-      <div className="p-3 rounded-md border border-amber-200 bg-amber-50 text-xs text-amber-900">
-        Directions require a Google Maps API key in{' '}
-        <code className="mx-1 px-1 rounded bg-white/60 border border-amber-200">.env</code>.
-        {mapsUrl && (
-          <>
-            {' '}
-            <a href={mapsUrl} target="_blank" rel="noreferrer" className="underline font-medium">
-              Open in Google Maps →
-            </a>
-          </>
-        )}
-      </div>
+      <LeafletDirections
+        destination={destination}
+        originFallback={originFallback}
+        travelMode={travelMode}
+        height={height}
+      />
     );
   }
 

@@ -36,6 +36,23 @@ export function generateQRCode(inventoryId = null) {
   return `${payload}.${sig}`;
 }
 
+/**
+ * Per-unit QR codes — one signed code per physical unit of an item.
+ * Deterministic (no timestamp) so they survive reloads and can be regenerated
+ * from the item id + index without storing them. Format: INVU.<itemId>-U<n>.<sig>
+ */
+export function generateUnitQRCode(itemId, n) {
+  const payload = `INVU.${itemId}-U${n}`;
+  const sig = crypto.createHmac('sha256', qrSecret()).update(payload).digest('hex').slice(0, 12);
+  return `${payload}.${sig}`;
+}
+
+/** Returns an array of `count` unit codes (1-based), capped at `max` to stay printable. */
+export function generateUnitQRCodes(itemId, count, max = 100) {
+  const n = Math.max(1, Math.min(Math.floor(Number(count) || 1), max));
+  return Array.from({ length: n }, (_, i) => generateUnitQRCode(itemId, i + 1));
+}
+
 /** Returns { inventoryIdish, issuedAt } when the QR is valid, null otherwise. */
 export function verifyQRCode(qr) {
   if (typeof qr !== 'string') return null;
@@ -102,6 +119,33 @@ export function validateImageDataUrl(dataUrl, maxBytes = 5 * 1024 * 1024) {
   return { ok: true, sizeBytes, mime };
 }
 
+/**
+ * Validate an invoice attachment data URL — accepts PDF or image, base64.
+ * (When S3 is wired up, invoice.dataUrl becomes an https URL and this check moves
+ * to the upload step instead.)
+ */
+export function validateInvoiceDataUrl(dataUrl, maxBytes = 10 * 1024 * 1024) {
+  if (!dataUrl || typeof dataUrl !== 'string') return { ok: false, error: 'Invoice missing or invalid' };
+  const m = /^data:(application\/pdf|image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  if (!m) return { ok: false, error: 'Invoice must be a PDF or image data URL' };
+  const [, mime, b64] = m;
+  const sizeBytes = Math.floor((b64.length * 3) / 4);
+  if (sizeBytes > maxBytes) {
+    return { ok: false, error: `Invoice too large (${Math.round(sizeBytes / 1024)} KB). Max is ${Math.round(maxBytes / 1024)} KB.` };
+  }
+  return { ok: true, sizeBytes, mime };
+}
+
 export function checkMilestoneReached(currentPoints, threshold) {
   return currentPoints >= threshold;
+}
+
+/**
+ * Anonymised, stable display code for a user id — e.g. maskCode(id, 'HUB') → 'HUB-9F3A2C'.
+ * Used so a recycler sees only a hub code (not its name/address) and vice-versa.
+ */
+export function maskCode(id, label) {
+  if (!id) return null;
+  const tail = String(id).replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase();
+  return `${label}-${tail}`;
 }

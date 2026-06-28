@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { MapPin, Crosshair, AlertCircle, Loader2 } from 'lucide-react';
+import { MapPin, Crosshair, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
+import LeafletMapPicker from './LeafletMapPicker';
 
 /**
  * Google Maps picker with "Use my location" reverse-geocoding.
@@ -234,52 +235,10 @@ export default function GoogleMapPicker({ value, onChange }) {
     );
   };
 
-  // ---- 4. Fallback UI when no API key or map is unavailable --------------
+  // ---- 4. Fallback when no API key or Google auth/load fails --------------
+  // Use the free Leaflet + OpenStreetMap picker (no key / billing required).
   if (!apiKey || mapUnavailable) {
-    return (
-      <div className="space-y-3">
-        {mapUnavailable ? (
-          <div className="p-3 rounded-md border border-red-200 bg-red-50 text-red-900 text-xs flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-            <div>
-              <strong>Map unavailable.</strong> {error || 'Google Maps failed to load.'} You can still enter your
-              address manually below, and optionally tap <strong>Use my location</strong> to fill coordinates.
-            </div>
-          </div>
-        ) : (
-          <div className="p-3 rounded-md border border-amber-200 bg-amber-50 text-amber-900 text-xs flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-            <div>
-              Google Maps key not configured. Please enter your address and optionally use
-              <strong> Use my location</strong> to auto-fill coordinates. Admin: set
-              <code className="mx-1 px-1 rounded bg-white/60 border border-amber-200">VITE_GOOGLE_MAPS_API_KEY</code>
-              in <code className="mx-1 px-1 rounded bg-white/60 border border-amber-200">.env</code> to enable the map.
-            </div>
-          </div>
-        )}
-        <input
-          type="text"
-          placeholder="Pickup address (street, city, landmark, pincode)"
-          value={value?.address || ''}
-          onChange={(e) => onChange?.({ ...(value || {}), address: e.target.value })}
-          className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none"
-        />
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={useMyLocation} disabled={locating} className="gap-2">
-            {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crosshair className="w-4 h-4" />}
-            {locating ? 'Locating…' : 'Use my location'}
-          </Button>
-          {value?.lat != null && value?.lng != null && (
-            <span className="text-xs text-muted-foreground">
-              {value.lat.toFixed(4)}, {value.lng.toFixed(4)}
-            </span>
-          )}
-        </div>
-        {!mapUnavailable && error && (
-          <div className="p-2 rounded-md border border-red-200 bg-red-50 text-red-900 text-xs">{error}</div>
-        )}
-      </div>
-    );
+    return <LeafletMapPicker value={value} onChange={onChange} />;
   }
 
   // ---- 5. Full map UI ----------------------------------------------------

@@ -2,12 +2,11 @@ import { Router } from 'express';
 import { users } from '../models/User';
 import { inventory } from '../models/Inventory';
 import { intents } from '../models/Intent';
-import { demands } from '../models/Demand';
 import { disputes } from '../models/Dispute';
-import { deliveries } from '../models/Delivery';
 import { payments } from '../models/Payment.js';
+import { recyclerRequests } from '../models/RecyclerRequest.js';
 import { verifyAuth, requireRole } from '../middleware/auth';
-import { generateId } from '../utils/helpers';
+import { nextId, PREFIX } from '../utils/idGenerator.js';
 import { notify } from '../services/notificationService.js';
 import { RewardEngine } from '../services/rewardEngine.js';
 import { validate, markPaymentSchema, assignRecyclerSchema } from '../schemas.js';
@@ -19,17 +18,6 @@ const router = Router();
  */
 router.get('/dashboard', verifyAuth, requireRole('admin'), (req, res) => {
   try {
-    const totalInventory = inventory.length;
-    const inventoryByStatus = {};
-    inventory.forEach((item) => {
-      inventoryByStatus[item.status] = (inventoryByStatus[item.status] || 0) + 1;
-    });
-    const activeUsers = users.filter((u) => u.isActive).length;
-    const usersByRole = {};
-    users.forEach((u) => {
-      usersByRole[u.role] = (usersByRole[u.role] || 0) + 1;
-    });
-
     const processed = inventory.filter((i) => i.status === 'processed').length;
     const verified = inventory.filter((i) => i.status === 'verified').length;
     const inTransit = inventory.filter((i) => i.status === 'in_transit').length;
@@ -39,13 +27,6 @@ router.get('/dashboard', verifyAuth, requireRole('admin'), (req, res) => {
 
     res.json({
       metrics: {
-        totalInventory,
-        inventoryByStatus,
-        activeUsers,
-        usersByRole,
-        totalIntents: intents.length,
-        totalDemands: demands.length,
-        openDisputes: disputes.filter((d) => d.status === 'open').length,
         verifiedAwaitingAssign: verified,
         inTransit,
         processed,
@@ -178,6 +159,164 @@ router.post('/assign-to-recycler', verifyAuth, requireRole('admin'), validate(as
 });
 
 /**
+ * GET /api/admin/recycler-requests — recycler requests + the verified stock that
+ * could fulfil them. Admin is the broker, so it sees real names on both sides.
+ */
+router.get('/recycler-requests', verifyAuth, requireRole('admin'), (req, res) => {
+  try {
+    const requests = recyclerRequests
+      .map((r) => {
+        const recycler = users.find((u) => u._id === r.recyclerId);
+        return {
+          ...r,
+          recyclerName: recycler?.name || 'Unknown',
+          recyclerEmail: recycler?.email || '',
+          allocatedCount: (r.allocatedInventory || []).length,
+        };
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // Verified stock available to allocate (status verified, not yet assigned).
+    const verifiedStock = inventory
+      .filter((i) => i.status === 'verified')
+      .map((item) => {
+        const hub = item.hubId ? users.find((u) => u._id === item.hubId) : null;
+        return {
+          _id: item._id,
+          qrCode: item.qrCode,
+          category: item.category,
+          actualQty: item.actualQty,
+          unit: item.unit,
+          weightKg: item.weightKg,
+          condition: item.condition,
+          hubName: hub?.name || null,
+          createdAt: item.createdAt,
+        };
+      });
+
+    res.json({ requests, verifiedStock, total: requests.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/recycler-requests/:id/approve
+ * body: { inventoryIds: [] } — allocate verified items to fulfil the request.
+ * Items move verified → matched and are linked to the recycler + request.
+ */
+router.post('/recycler-requests/:id/approve', verifyAuth, requireRole('admin'), (req, res) => {
+  try {
+    const request = recyclerRequests.find((r) => r._id === req.params.id);
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (['fulfilled', 'rejected', 'cancelled'].includes(request.status)) {
+      return res.status(409).json({ error: `Request is already ${request.status}.` });
+    }
+
+    const { inventoryIds } = req.body;
+    if (!Array.isArray(inventoryIds) || inventoryIds.length === 0) {
+      return res.status(400).json({ error: 'inventoryIds (non-empty array) required' });
+    }
+
+    const recycler = users.find((u) => u._id === request.recyclerId);
+    if (!recycler) return res.status(404).json({ error: 'Recycler not found' });
+
+    const now = new Date().toISOString();
+    const me = users.find((u) => u._id === req.user.id);
+    const allocated = [];
+    const hubIds = new Set();
+
+    for (const id of inventoryIds) {
+      const item = inventory.find((i) => i._id === id);
+      if (!item || item.status !== 'verified') continue;
+      item.status = 'matched';
+      item.recyclerId = request.recyclerId;
+      item.requestId = request._id;
+      item.traceability.push({
+        actor: req.user.id,
+        actorName: me?.name,
+        action: 'assigned_to_recycler',
+        note: `via request ${request._id}`,
+        timestamp: now,
+      });
+      item.updatedAt = now;
+      allocated.push(item);
+      if (item.hubId) hubIds.add(item.hubId);
+    }
+
+    if (allocated.length === 0) {
+      return res.status(400).json({ error: 'No eligible verified items in the selection.' });
+    }
+
+    request.allocatedInventory = [...(request.allocatedInventory || []), ...allocated.map((i) => i._id)];
+    const allocatedItems = inventory.filter((i) => request.allocatedInventory.includes(i._id));
+    // Measure fulfillment in the request's own unit: kg requests count weight,
+    // everything else counts pieces. Summing actualQty against a kg target would
+    // mark a 100 kg request "fulfilled" after 100 phones.
+    const requestInKg = (request.unit || 'kg').toLowerCase() === 'kg';
+    const allocatedQty = allocatedItems.reduce(
+      (sum, i) => sum + (requestInKg ? i.weightKg || 0 : i.actualQty || 0),
+      0
+    );
+    request.status = allocatedQty >= request.quantity ? 'fulfilled' : 'partially_approved';
+    request.reviewedBy = req.user.id;
+    request.updatedAt = now;
+
+    // Notify recycler (no hub identity) and each source hub (no recycler identity).
+    notify(request.recyclerId, {
+      type: 'request_approved',
+      title: 'Material request approved',
+      message: `Admin allocated ${allocated.length} item(s) (${allocatedQty} ${request.unit || 'kg'} total) to your ${request.category} request.`,
+      relatedId: request._id,
+    });
+    hubIds.forEach((hubId) =>
+      notify(hubId, {
+        type: 'stock_allocated',
+        title: 'Verified stock allocated',
+        message: `Admin routed some of your verified ${request.category} stock to a recycler order.`,
+      })
+    );
+
+    res.json({
+      message: `Allocated ${allocated.length} item(s) to ${recycler.name}`,
+      request,
+      allocatedCount: allocated.length,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/recycler-requests/:id/reject — body: { note }
+ */
+router.post('/recycler-requests/:id/reject', verifyAuth, requireRole('admin'), (req, res) => {
+  try {
+    const request = recyclerRequests.find((r) => r._id === req.params.id);
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (['fulfilled', 'rejected', 'cancelled'].includes(request.status)) {
+      return res.status(409).json({ error: `Request is already ${request.status}.` });
+    }
+    const { note } = req.body;
+    request.status = 'rejected';
+    request.reviewNote = note || null;
+    request.reviewedBy = req.user.id;
+    request.updatedAt = new Date().toISOString();
+
+    notify(request.recyclerId, {
+      type: 'request_rejected',
+      title: 'Material request rejected',
+      message: `Your ${request.category} request was not approved.${note ? ` Reason: ${note}` : ''}`,
+      relatedId: request._id,
+    });
+
+    res.json({ message: 'Request rejected', request });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * GET /api/admin/orders — every inventory item with full chain (one-stop view)
  */
 router.get('/orders', verifyAuth, requireRole('admin'), (req, res) => {
@@ -201,6 +340,7 @@ router.get('/orders', verifyAuth, requireRole('admin'), (req, res) => {
         collectorName: col?.name,
         hubName: hub?.name,
         recyclerName: rec?.name,
+        recyclerRatePerKg: rec?.ratePerKg || 0,
         deliveryWorkerName: del?.name,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
@@ -235,7 +375,7 @@ router.post('/mark-payment', verifyAuth, requireRole('admin'), validate(markPaym
     const now = new Date().toISOString();
 
     const payment = {
-      _id: generateId(),
+      _id: nextId(PREFIX.PAYMENT),
       inventoryId,
       recyclerId: item.recyclerId,
       collectedBy: req.user.id,
@@ -314,6 +454,9 @@ router.put('/disputes/:id', verifyAuth, requireRole('admin'), (req, res) => {
     const dispute = disputes.find((d) => d._id === req.params.id);
     if (!dispute) return res.status(404).json({ error: 'Dispute not found' });
     const { resolution } = req.body;
+    if (!resolution || !String(resolution).trim()) {
+      return res.status(400).json({ error: 'resolution text is required' });
+    }
     dispute.status = 'resolved';
     dispute.resolvedBy = req.user.id;
     dispute.resolution = resolution;

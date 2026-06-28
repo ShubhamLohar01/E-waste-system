@@ -24,8 +24,6 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import NotificationsBell from "@/components/NotificationsBell";
 import BoxStickerSheet from "@/components/BoxStickerSheet";
-import { api } from "@/lib/api";
-import { Coins } from "lucide-react";
 import RaiseDisputeDialog from "@/components/RaiseDisputeDialog";
 
 const CONDITIONS = ["excellent", "good", "fair", "damaged"];
@@ -36,7 +34,6 @@ export default function HubDashboard() {
   const [activeTab, setActiveTab] = useState("incoming");
   const [incomingItems, setIncomingItems] = useState([]);
   const [verifiedItems, setVerifiedItems] = useState([]);
-  const [rewardPoints, setRewardPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
 
@@ -82,10 +79,6 @@ export default function HubDashboard() {
         const data = await invRes.json();
         setVerifiedItems(data.verifiedItems || []);
       }
-      try {
-        const rw = await api.get("/api/rewards/mine");
-        setRewardPoints(rw?.totalPoints ?? 0);
-      } catch { /* ignore */ }
     } catch (err) {
       console.error("Failed to fetch data:", err);
     }
@@ -99,6 +92,26 @@ export default function HubDashboard() {
     };
     load();
   }, [fetchData]);
+
+  const handleReceive = async (item) => {
+    setActionLoading("receive-" + item._id);
+    try {
+      const res = await apiFetch("/api/hub/receive", {
+        method: "POST",
+        body: JSON.stringify({ inventoryIds: [item._id] }),
+      });
+      if (res.ok) {
+        await fetchData();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to receive items");
+      }
+    } catch {
+      alert("Failed to receive items");
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const openVerifyDialog = (item) => {
     setSelectedItem(item);
@@ -244,13 +257,6 @@ export default function HubDashboard() {
             </div>
             <div className="flex items-center gap-3">
               <NotificationsBell />
-              <span
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-sm font-medium"
-                title="Your reward points"
-              >
-                <Coins className="w-4 h-4" />
-                {Math.round(rewardPoints)} pts
-              </span>
               <Link to="/profile">
                 <Button variant="outline" size="sm" className="hidden sm:inline-flex">Profile</Button>
               </Link>
@@ -265,43 +271,6 @@ export default function HubDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Staged boxes — print, then verify (moves the item to Verified Inventory) */}
-        {staged && (
-          <section className="mb-8 rounded-lg border-2 border-amber-300 bg-amber-50/60 p-5">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-amber-600" />
-                  Print &amp; verify — {staged.item?.category}
-                </h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {(staged.boxes || []).length} box{(staged.boxes || []).length > 1 ? "es" : ""} · Txn {staged.transactionNo}.
-                  Print the QR stickers first, then verify to move this item to Verified Inventory.
-                </p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={discardStaged} className="text-muted-foreground">
-                Cancel
-              </Button>
-            </div>
-
-            <BoxStickerSheet boxes={staged.boxes || []} onPrint={() => setPrinted(true)} />
-
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <Button
-                onClick={handleConfirmPrint}
-                disabled={!printed}
-                className="gap-2 bg-green-600 hover:bg-green-700"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Verify &amp; move to inventory
-              </Button>
-              {!printed && (
-                <span className="text-xs text-amber-700">Print the QR stickers to enable verification.</span>
-              )}
-            </div>
-          </section>
-        )}
-
         {/* Welcome */}
         <section className="mb-10">
           <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-lg p-8">
@@ -392,8 +361,18 @@ export default function HubDashboard() {
                       <h3 className="text-lg font-semibold text-foreground">{item.category}</h3>
                       <p className="text-sm text-muted-foreground">QR: {item.qrCode}</p>
                     </div>
-                    <span className="px-3 py-1.5 rounded-full text-xs font-semibold bg-yellow-50 text-yellow-700 border border-yellow-200">
-                      Awaiting Verification
+                    <span className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                      item.status === "at_hub"
+                        ? "bg-orange-50 text-orange-700 border-orange-200"
+                        : item.status === "pending_print"
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                    }`}>
+                      {item.status === "at_hub"
+                        ? "Pending receipt"
+                        : item.status === "pending_print"
+                          ? "Printing"
+                          : "Awaiting Verification"}
                     </span>
                   </div>
 
@@ -430,7 +409,20 @@ export default function HubDashboard() {
                   )}
 
                   <div className="flex gap-3 flex-wrap">
-                    {item.status === "pending_print" ? (
+                    {item.status === "at_hub" ? (
+                      <Button
+                        onClick={() => handleReceive(item)}
+                        disabled={actionLoading === "receive-" + item._id}
+                        className="gap-2"
+                      >
+                        {actionLoading === "receive-" + item._id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <ClipboardCheck className="w-4 h-4" />
+                        )}
+                        Receive
+                      </Button>
+                    ) : item.status === "pending_print" ? (
                       <Button onClick={() => openVerifyDialog(item)} className="gap-2 bg-amber-600 hover:bg-amber-700">
                         <Clock className="w-4 h-4" />
                         Finish printing
@@ -587,6 +579,44 @@ export default function HubDashboard() {
               </div>
             )}
           </div>
+        )}
+
+        {/* Staged boxes — print, then verify (moves the item to Verified Inventory).
+            Placed below the entry lists so it appears under the item just verified. */}
+        {staged && (
+          <section className="mt-8 rounded-lg border-2 border-amber-300 bg-amber-50/60 p-5">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-amber-600" />
+                  Print &amp; verify — {staged.item?.category}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {(staged.boxes || []).length} box{(staged.boxes || []).length > 1 ? "es" : ""} · Txn {staged.transactionNo}.
+                  Print the QR stickers first, then verify to move this item to Verified Inventory.
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={discardStaged} className="text-muted-foreground">
+                Cancel
+              </Button>
+            </div>
+
+            <BoxStickerSheet boxes={staged.boxes || []} onPrint={() => setPrinted(true)} />
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Button
+                onClick={handleConfirmPrint}
+                disabled={!printed}
+                className="gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Verify &amp; move to inventory
+              </Button>
+              {!printed && (
+                <span className="text-xs text-amber-700">Print the QR stickers to enable verification.</span>
+              )}
+            </div>
+          </section>
         )}
       </main>
 

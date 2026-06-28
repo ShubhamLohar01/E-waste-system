@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { intents } from '../models/Intent';
-import { generateId, generateQRCode, validateImageDataUrl } from '../utils/helpers';
+import { generateQRCode, validateImageDataUrl, validateInvoiceDataUrl } from '../utils/helpers';
+import { nextId, PREFIX } from '../utils/idGenerator.js';
 import { verifyAuth, requireRole } from '../middleware/auth';
 import { inventory } from '../models/Inventory';
 import { rewards } from '../models/Reward';
@@ -8,6 +9,7 @@ import { users } from '../models/User';
 import { haversineKm, sortByDistanceFrom } from '../utils/distance.js';
 import { notify, notifyMany } from '../services/notificationService.js';
 import { validate, intentSchema } from '../schemas.js';
+import { isS3Configured, uploadDataUrl } from '../services/s3.js';
 
 const router = Router();
 
@@ -25,6 +27,49 @@ router.post('/', verifyAuth, requireRole('small_user'), validate(intentSchema), 
         const check = validateImageDataUrl(p, 5 * 1024 * 1024);
         if (!check.ok) return res.status(400).json({ error: check.error });
       }
+      // Optional invoice — PDF or image, base64 data URL
+      if (it.invoice?.dataUrl) {
+        const check = validateInvoiceDataUrl(it.invoice.dataUrl, 10 * 1024 * 1024);
+        if (!check.ok) return res.status(400).json({ error: check.error });
+      }
+    }
+
+    // Upload photos / invoices to S3 (store the URL in the DB instead of base64).
+    // If S3 isn't configured, fall back to keeping the base64 data URL.
+    const s3On = isS3Configured();
+    let prepared;
+    try {
+      prepared = await Promise.all(
+        items.map(async (item) => {
+          const photos = await Promise.all(
+            (item.photos || []).map(async (p) =>
+              s3On && typeof p === 'string' && p.startsWith('data:')
+                ? (await uploadDataUrl(p, 'photos')).url
+                : p
+            )
+          );
+
+          let invoice = null;
+          if (item.invoice?.dataUrl) {
+            if (s3On && item.invoice.dataUrl.startsWith('data:')) {
+              const up = await uploadDataUrl(item.invoice.dataUrl, 'invoices');
+              invoice = { name: item.invoice.name || '', url: up.url, type: up.type };
+            } else {
+              const mimeMatch = /^data:([^;]+);/.exec(item.invoice.dataUrl);
+              invoice = {
+                name: item.invoice.name || '',
+                url: item.invoice.dataUrl,
+                type: mimeMatch ? mimeMatch[1] : null,
+              };
+            }
+          }
+
+          return { item, photos, invoice };
+        })
+      );
+    } catch (e) {
+      console.error('[intent] S3 upload failed:', e?.message || e);
+      return res.status(502).json({ error: 'Failed to upload attachments to storage' });
     }
 
     const now = new Date().toISOString();
@@ -41,14 +86,16 @@ router.post('/', verifyAuth, requireRole('small_user'), validate(intentSchema), 
     };
 
     const intent = {
-      _id: generateId(),
+      _id: nextId(PREFIX.INTENT),
       userId: req.user.id,
+      username: sourceUser?.name || null,
       type: 'small_user',
-      items: items.map((item) => ({
+      items: prepared.map(({ item, photos, invoice }) => ({
         category: item.category,
         estimatedQty: item.estimatedQty,
         unit: item.unit,
-        photos: item.photos || [],
+        photos,
+        invoice,
         condition: item.condition,
         purchaseDate: item.purchaseDate,
       })),
@@ -60,8 +107,8 @@ router.post('/', verifyAuth, requireRole('small_user'), validate(intentSchema), 
     intents.push(intent);
 
     // Create inventory rows for each item (sourceUser already resolved above)
-    for (const item of items) {
-      const invId = generateId();
+    for (const { item, photos } of prepared) {
+      const invId = nextId(PREFIX.INVENTORY);
       inventory.push({
         _id: invId,
         qrCode: generateQRCode(invId),
@@ -79,7 +126,7 @@ router.post('/', verifyAuth, requireRole('small_user'), validate(intentSchema), 
         deliveryWorkerId: null,
         recyclerId: null,
         matchedDemandId: null,
-        verificationPhotos: item.photos || [],
+        verificationPhotos: photos,
         traceability: [
           {
             actor: req.user.id,
@@ -149,27 +196,9 @@ router.get('/collected-waste', verifyAuth, requireRole('small_user'), (req, res)
     const collected = inventory.filter(
       (i) =>
         i.sourceUserId === req.user.id &&
-        ['collected', 'at_hub', 'verified', 'matched', 'in_transit', 'delivered', 'processed'].includes(i.status)
+        ['collected', 'at_hub', 'received', 'pending_print', 'verified', 'matched', 'in_transit', 'delivered', 'processed'].includes(i.status)
     );
     res.json({ items: collected, total: collected.length });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/intent/:id
- */
-router.get('/:id', verifyAuth, (req, res) => {
-  try {
-    const intent = intents.find((i) => i._id === req.params.id);
-    if (!intent) return res.status(404).json({ error: 'Intent not found' });
-
-    if (intent.userId !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
-    const inventoryItems = inventory.filter((i) => i.intentId === intent._id);
-    res.json({ intent, inventoryItems });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -188,7 +217,8 @@ router.get('/', verifyAuth, (req, res) => {
     } else {
       return res.status(403).json({ error: 'Unauthorized' });
     }
-    // Enrich with assigned collector name
+    // Enrich with assigned collector name. S3 attachment URLs are presigned
+    // centrally by the presignResponses middleware.
     const enriched = userIntents.map((it) => {
       const col = it.assignedCollector ? users.find((u) => u._id === it.assignedCollector) : null;
       return { ...it, collectorName: col?.name || null, collectorPhone: col?.phone || null };
@@ -255,6 +285,28 @@ router.get('/history', verifyAuth, (req, res) => {
       inventory: inventoryItems,
       totalContributions: userIntents.length,
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/intent/:id
+ *
+ * IMPORTANT: keep this LAST. A parametric ':id' segment matches any literal
+ * path ('/rewards', '/history', …), so it must be registered after all the
+ * specific routes above or it will shadow them and return 404.
+ */
+router.get('/:id', verifyAuth, (req, res) => {
+  try {
+    const intent = intents.find((i) => i._id === req.params.id);
+    if (!intent) return res.status(404).json({ error: 'Intent not found' });
+
+    if (intent.userId !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const inventoryItems = inventory.filter((i) => i.intentId === intent._id);
+    res.json({ intent, inventoryItems });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

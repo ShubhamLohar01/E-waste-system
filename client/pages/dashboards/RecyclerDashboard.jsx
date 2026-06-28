@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Package, LogOut, Factory, Truck, Loader2, CheckCircle2, Boxes, Clock, Building2, Phone, MapPin, Check, Weight,
-  ClipboardList, Plus, Send, Ban,
+  ClipboardList, Plus, Send, Ban, Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,7 +15,7 @@ import RaiseDisputeDialog from '@/components/RaiseDisputeDialog';
 
 const REQUEST_CATEGORIES = [
   'Old Laptops', 'Mobile Phones', 'Electronic Cables', 'Monitors',
-  'Batteries', 'Circuit Boards', 'Printers', 'Keyboards & Mouse', 'Other',
+  'Batteries', 'Circuit Boards', 'Semiconductors', 'Printers', 'Keyboards & Mouse', 'Other',
 ];
 const emptyReqForm = () => ({ category: REQUEST_CATEGORIES[0], quantity: 10, unit: 'kg', note: '', targetDate: '' });
 
@@ -28,6 +28,8 @@ export default function RecyclerDashboard() {
   const [boxGroups, setBoxGroups] = useState([]);
   const [ackBusy, setAckBusy] = useState(null); // boxId currently being acknowledged
   const [ackPaste, setAckPaste] = useState('');
+  const [qualityForm, setQualityForm] = useState({}); // inventoryId -> { technicianName, rating }
+  const [qualityBusy, setQualityBusy] = useState(null); // inventoryId currently being saved
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selected, setSelected] = useState(new Set());
@@ -91,6 +93,25 @@ export default function RecyclerDashboard() {
       alert(err?.message || 'Could not acknowledge this box.');
     } finally {
       setAckBusy(null);
+    }
+  };
+
+  const recordQuality = async (inventoryId) => {
+    const form = qualityForm[inventoryId] || {};
+    const technicianName = (form.technicianName || '').trim();
+    const qualityRating = Number(form.rating);
+    if (technicianName.length < 2) return alert('Enter the technician name (at least 2 characters).');
+    if (!Number.isInteger(qualityRating) || qualityRating < 1 || qualityRating > 10) {
+      return alert('Pick a quality rating from 1 to 10.');
+    }
+    setQualityBusy(inventoryId);
+    try {
+      await api.post('/api/recycler/quality', { inventoryId, technicianName, qualityRating });
+      await refresh();
+    } catch (err) {
+      alert(err?.message || 'Could not save the quality assessment.');
+    } finally {
+      setQualityBusy(null);
     }
   };
 
@@ -160,7 +181,10 @@ export default function RecyclerDashboard() {
       </div>
     );
 
-  const matched = orders.filter((o) => o.status === 'matched');
+  // Awaiting pickup = assigned to me, not yet dispatched to a delivery agent.
+  // Dispatched = a delivery agent is assigned but hasn't picked up yet.
+  const matched = orders.filter((o) => o.status === 'matched' && !o.deliveryWorkerId);
+  const dispatched = orders.filter((o) => o.status === 'matched' && o.deliveryWorkerId);
   const inTransit = orders.filter((o) => ['in_transit'].includes(o.status));
   const received = orders.filter((o) => ['delivered', 'processed'].includes(o.status));
 
@@ -310,6 +334,39 @@ export default function RecyclerDashboard() {
           )}
         </section>
 
+        {dispatched.length > 0 && (
+          <section>
+            <h2 className="text-xl font-bold mb-1">Dispatched — awaiting pickup</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              A delivery agent has been assigned. These items are waiting to be picked up from the hub.
+            </p>
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">Category</th>
+                    <th className="px-3 py-2 text-left font-semibold">Qty</th>
+                    <th className="px-3 py-2 text-left font-semibold">Weight</th>
+                    <th className="px-3 py-2 text-left font-semibold">Pickup hub</th>
+                    <th className="px-3 py-2 text-left font-semibold">Delivery agent</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {dispatched.map((it) => (
+                    <tr key={it._id} className="hover:bg-muted/20">
+                      <td className="px-3 py-2 font-medium">{it.category}</td>
+                      <td className="px-3 py-2">{it.actualQty} {it.unit}</td>
+                      <td className="px-3 py-2">{it.weightKg != null ? `${it.weightKg} kg` : '—'}</td>
+                      <td className="px-3 py-2 font-mono text-xs">{it.hubCode || '—'}</td>
+                      <td className="px-3 py-2">{it.deliveryWorkerName || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
         <section>
           <h2 className="text-xl font-bold mb-4">Inbound deliveries</h2>
           {deliveries.length === 0 ? (
@@ -412,6 +469,66 @@ export default function RecyclerDashboard() {
                       </div>
                     ))}
                   </div>
+
+                  {g.acknowledged === g.total && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      {g.qualityRating != null ? (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Star className="w-4 h-4 text-amber-500" />
+                          <span className="font-semibold">Quality {g.qualityRating}/10</span>
+                          {g.technicianName && (
+                            <span className="text-muted-foreground">· assessed by {g.technicianName}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-sm font-medium mb-2">Record quality assessment</p>
+                          <div className="flex flex-wrap items-end gap-3">
+                            <div>
+                              <label className="block text-xs text-muted-foreground mb-1">Technician name</label>
+                              <input
+                                type="text"
+                                value={qualityForm[g.inventoryId]?.technicianName || ''}
+                                onChange={(e) =>
+                                  setQualityForm((f) => ({
+                                    ...f,
+                                    [g.inventoryId]: { ...f[g.inventoryId], technicianName: e.target.value },
+                                  }))
+                                }
+                                placeholder="e.g. Ramesh K."
+                                className="w-48 px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-muted-foreground mb-1">Quality (1–10)</label>
+                              <select
+                                value={qualityForm[g.inventoryId]?.rating ?? ''}
+                                onChange={(e) =>
+                                  setQualityForm((f) => ({
+                                    ...f,
+                                    [g.inventoryId]: { ...f[g.inventoryId], rating: e.target.value },
+                                  }))
+                                }
+                                className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                              >
+                                <option value="" disabled>Rate…</option>
+                                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                                  <option key={n} value={n}>{n}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <Button
+                              size="sm"
+                              disabled={qualityBusy === g.inventoryId}
+                              onClick={() => recordQuality(g.inventoryId)}
+                            >
+                              {qualityBusy === g.inventoryId ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save quality'}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

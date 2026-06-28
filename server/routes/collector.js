@@ -9,8 +9,14 @@ import { notify } from '../services/notificationService.js';
 
 const router = Router();
 
+// Pickup requests beyond this radius from the collector's set location are hidden.
+const MAX_PICKUP_RADIUS_KM = 15;
+
 /**
- * GET /api/collector/pending — unassigned requests sorted by distance from me
+ * GET /api/collector/pending — unassigned requests sorted by distance from me.
+ * Once the collector has a location set, requests farther than
+ * MAX_PICKUP_RADIUS_KM are excluded; requests with unknown distance
+ * (no location yet, or no intent coordinates) are still shown.
  */
 router.get('/pending', verifyAuth, requireRole('local_collector'), (req, res) => {
   try {
@@ -30,6 +36,7 @@ router.get('/pending', verifyAuth, requireRole('local_collector'), (req, res) =>
           distanceKm: Number.isFinite(distanceKm) ? Number(distanceKm.toFixed(2)) : null,
         };
       })
+      .filter((i) => i.distanceKm == null || i.distanceKm <= MAX_PICKUP_RADIUS_KM)
       .sort((a, b) => (a.distanceKm ?? 9e9) - (b.distanceKm ?? 9e9));
 
     res.json({ intents: pending, total: pending.length });
@@ -234,7 +241,7 @@ router.get('/history', verifyAuth, requireRole('local_collector'), (req, res) =>
       items: collectedItems,
       totalCollected: collectedItems.length,
       deliveredToHub: collectedItems.filter((i) =>
-        ['at_hub', 'verified', 'matched', 'in_transit', 'delivered', 'processed'].includes(i.status)
+        ['at_hub', 'received', 'pending_print', 'verified', 'matched', 'in_transit', 'delivered', 'processed'].includes(i.status)
       ).length,
       processed: collectedItems.filter((i) => i.status === 'processed').length,
     });

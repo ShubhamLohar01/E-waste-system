@@ -14,20 +14,25 @@ import recyclerRoutes from "./routes/recycler.js";
 import notificationRoutes from "./routes/notifications.js";
 import rewardRoutes from "./routes/rewards.js";
 import disputesRoutes from "./routes/disputes.js";
-import { seedDatabase } from "./seed.js";
+import { ensureSchema, hydrateAll } from "./lib/pgStore.js";
 import { persistAll } from "./middleware/persistAll.js";
+import { presignResponses } from "./middleware/presignResponses.js";
 
 export async function createServer() {
-  // Seed JSON store if empty
-  await seedDatabase();
+  // Apply additive column migrations, then load all collections into memory
+  await ensureSchema();
+  await hydrateAll();
 
   const app = express();
   app.use(cors());
-  app.use(express.json({ limit: "10mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+  app.use(express.json({ limit: "25mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
-  // Flush all collections to JSON after every mutating request
+  // Flush all collections to Postgres after every mutating request
   app.use(persistAll);
+
+  // Replace S3 object URLs in any JSON response with short-lived presigned URLs
+  app.use(presignResponses);
 
   app.get("/api/ping", (_req, res) => {
     res.json({ message: process.env.PING_MESSAGE ?? "ping" });

@@ -28,6 +28,7 @@ export default function AdminDashboard() {
   const [unassignedIntents, setUnassignedIntents] = useState([]);
   const [collectorsList, setCollectorsList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [busy, setBusy] = useState(null);
   const [resolveTarget, setResolveTarget] = useState(null);
   const [resolutionText, setResolutionText] = useState('');
@@ -36,6 +37,12 @@ export default function AdminDashboard() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [recyclerId, setRecyclerId] = useState('');
+
+  // recycler requests
+  const [recyclerRequests, setRecyclerRequests] = useState([]);
+  const [verifiedStock, setVerifiedStock] = useState([]);
+  const [approveTarget, setApproveTarget] = useState(null);
+  const [allocIds, setAllocIds] = useState(new Set());
 
   // mark payment
   const [payOpen, setPayOpen] = useState(false);
@@ -46,7 +53,7 @@ export default function AdminDashboard() {
 
   const refresh = useCallback(async () => {
     try {
-      const [m, v, o, p, u, d, a, ints] = await Promise.all([
+      const [m, v, o, p, u, d, a, ints, rr] = await Promise.all([
         api.get('/api/admin/dashboard'),
         api.get('/api/admin/verified-items'),
         api.get('/api/admin/orders'),
@@ -55,6 +62,7 @@ export default function AdminDashboard() {
         api.get('/api/admin/disputes'),
         api.get('/api/admin/audit'),
         api.get('/api/admin/intents'),
+        api.get('/api/admin/recycler-requests'),
       ]);
       setMetrics(m?.metrics || null);
       setVerified(v?.items || []);
@@ -66,8 +74,12 @@ export default function AdminDashboard() {
       setAuditLog(a?.auditLog || []);
       setUnassignedIntents((ints?.intents || []).filter((i) => !i.assignedCollector && i.status === 'submitted'));
       setCollectorsList(ints?.collectors || []);
+      setRecyclerRequests(rr?.requests || []);
+      setVerifiedStock(rr?.verifiedStock || []);
+      setLoadError(null);
     } catch (err) {
       console.error(err);
+      setLoadError(err?.message || 'Failed to load dashboard data.');
     }
   }, []);
 
@@ -113,9 +125,55 @@ export default function AdminDashboard() {
     }
   };
 
+  const toggleAlloc = (id) =>
+    setAllocIds((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  const openApprove = (request) => {
+    setAllocIds(new Set());
+    setApproveTarget(request);
+  };
+
+  const approveRequest = async () => {
+    if (!approveTarget || allocIds.size === 0) return alert('Select at least one item to allocate.');
+    setBusy('approve');
+    try {
+      await api.post(`/api/admin/recycler-requests/${approveTarget._id}/approve`, {
+        inventoryIds: [...allocIds],
+      });
+      setApproveTarget(null);
+      setAllocIds(new Set());
+      await refresh();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const rejectRequest = async (request) => {
+    const note = prompt('Reason for rejection (optional):');
+    if (note === null) return; // cancelled
+    setBusy('reject-' + request._id);
+    try {
+      await api.post(`/api/admin/recycler-requests/${request._id}/reject`, { note });
+      await refresh();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const openPayment = (item) => {
-    const rec = recyclers.find((r) => r._id === item.recyclerId || r._id === item.recyclerId);
-    const suggested = rec?.ratePerKg && item.weightKg ? Math.round(rec.ratePerKg * item.weightKg) : 0;
+    const suggested =
+      item.recyclerRatePerKg && item.weightKg
+        ? Math.round(item.recyclerRatePerKg * item.weightKg)
+        : 0;
     setPayItem(item);
     setPayAmount(suggested);
     setPayMethod('bank_transfer');
@@ -203,6 +261,12 @@ export default function AdminDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {loadError && (
+          <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span>Couldn’t refresh dashboard data: {loadError}. Showing last known values.</span>
+          </div>
+        )}
         <section className="bg-gradient-to-r from-slate-500/10 to-gray-500/10 border border-slate-500/20 rounded-lg p-8">
           <div className="flex items-center gap-3 mb-2">
             <Shield className="w-7 h-7 text-slate-600" />
@@ -221,6 +285,7 @@ export default function AdminDashboard() {
         <div className="flex flex-wrap gap-2 border-b border-border">
           {[
             ['verified', 'Verified · Assign recycler'],
+            ['recycler_requests', `Recycler requests (${recyclerRequests.filter((r) => r.status === 'pending').length})`],
             ['pending_payment', `Payment due (${delivered.length})`],
             ['assign_collector', `Unassigned intents (${unassignedIntents.length})`],
             ['disputes', `Disputes (${disputes.filter(d => d.status === 'open').length} open)`],
@@ -283,6 +348,62 @@ export default function AdminDashboard() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        {tab === 'recycler_requests' && (
+          <section className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Recyclers request a category &amp; quantity here. Approve by allocating hub-verified stock —
+              the recycler never sees which hub it came from, and the hub never sees the recycler.
+            </p>
+            {recyclerRequests.length === 0 ? (
+              <div className="p-10 rounded-lg border border-dashed text-center text-muted-foreground">
+                No recycler requests yet.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recyclerRequests.map((r) => {
+                  const matchStock = verifiedStock.filter((s) => s.category === r.category).length;
+                  return (
+                    <div key={r._id} className="p-4 rounded-lg border border-border bg-card">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-semibold">{r.category} — {r.quantity} {r.unit}</p>
+                            <RequestBadge status={r.status} />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            From {r.recyclerName} · {new Date(r.createdAt).toLocaleString()}
+                            {r.targetDate ? ` · needed by ${r.targetDate}` : ''}
+                          </p>
+                          {r.note && <p className="text-xs text-muted-foreground mt-1">Note: {r.note}</p>}
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Allocated: {r.allocatedCount} item(s) · {matchStock} verified {r.category} item(s) available
+                          </p>
+                        </div>
+                        {['pending', 'partially_approved'].includes(r.status) && (
+                          <div className="flex flex-col gap-2 flex-shrink-0">
+                            <Button size="sm" onClick={() => openApprove(r)} className="gap-1">
+                              <Factory className="w-4 h-4" /> Approve / allocate
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => rejectRequest(r)}
+                              disabled={busy === 'reject-' + r._id}
+                              className="gap-1 text-destructive"
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -626,6 +747,67 @@ export default function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
+      {/* Approve recycler request — allocate verified stock */}
+      <Dialog
+        open={!!approveTarget}
+        onOpenChange={(v) => { if (!v) { setApproveTarget(null); setAllocIds(new Set()); } }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Allocate stock to request</DialogTitle>
+          </DialogHeader>
+          {approveTarget && (() => {
+            const candidates = verifiedStock.filter((s) => s.category === approveTarget.category);
+            return (
+              <div className="space-y-4 py-2">
+                <div className="p-3 rounded bg-muted/30 text-sm">
+                  <p className="font-medium">{approveTarget.category} — {approveTarget.quantity} {approveTarget.unit}</p>
+                  <p className="text-muted-foreground">
+                    From {approveTarget.recyclerName}{approveTarget.note ? ` · ${approveTarget.note}` : ''}
+                  </p>
+                </div>
+                {candidates.length === 0 ? (
+                  <p className="text-sm text-muted-foreground p-4 text-center border border-dashed rounded">
+                    No verified {approveTarget.category} stock available right now.
+                  </p>
+                ) : (
+                  <div className="rounded-lg border border-border overflow-hidden max-h-[320px] overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="px-3 py-2 w-8"></th>
+                          <th className="px-3 py-2 text-left font-semibold">Qty</th>
+                          <th className="px-3 py-2 text-left font-semibold">Weight</th>
+                          <th className="px-3 py-2 text-left font-semibold">Hub</th>
+                          <th className="px-3 py-2 text-left font-semibold">QR</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {candidates.map((s) => (
+                          <tr key={s._id} className="hover:bg-muted/20">
+                            <td className="px-3 py-2">
+                              <input type="checkbox" checked={allocIds.has(s._id)} onChange={() => toggleAlloc(s._id)} />
+                            </td>
+                            <td className="px-3 py-2">{s.actualQty} {s.unit}</td>
+                            <td className="px-3 py-2">{s.weightKg != null ? `${s.weightKg} kg` : '—'}</td>
+                            <td className="px-3 py-2">{s.hubName || '—'}</td>
+                            <td className="px-3 py-2 font-mono text-xs">{s.qrCode?.slice(0, 12)}…</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <Button onClick={approveRequest} disabled={busy === 'approve' || allocIds.size === 0} className="w-full gap-2">
+                  {busy === 'approve' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  Allocate {allocIds.size} item(s) to recycler
+                </Button>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       {/* Record payment dialog */}
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
         <DialogContent>
@@ -700,5 +882,23 @@ function Stat({ label, value, icon }) {
       </div>
       {icon}
     </div>
+  );
+}
+
+const REQUEST_STATUS_STYLES = {
+  pending: 'bg-amber-100 text-amber-800 border-amber-200',
+  approved: 'bg-blue-100 text-blue-800 border-blue-200',
+  partially_approved: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+  fulfilled: 'bg-green-100 text-green-800 border-green-200',
+  rejected: 'bg-red-100 text-red-800 border-red-200',
+  cancelled: 'bg-gray-100 text-gray-700 border-gray-200',
+};
+
+function RequestBadge({ status }) {
+  const cls = REQUEST_STATUS_STYLES[status] || 'bg-muted text-foreground border-border';
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border capitalize ${cls}`}>
+      {String(status || '').replace(/_/g, ' ')}
+    </span>
   );
 }

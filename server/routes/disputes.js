@@ -3,7 +3,7 @@ import { disputes } from '../models/Dispute';
 import { users } from '../models/User';
 import { inventory } from '../models/Inventory';
 import { verifyAuth } from '../middleware/auth';
-import { generateId } from '../utils/helpers';
+import { nextId, PREFIX } from '../utils/idGenerator.js';
 import { validate, disputeCreateSchema } from '../schemas.js';
 import { notify } from '../services/notificationService.js';
 
@@ -30,7 +30,7 @@ router.post('/', verifyAuth, validate(disputeCreateSchema), (req, res) => {
   }
 
   const dispute = {
-    _id: generateId(),
+    _id: nextId(PREFIX.DISPUTE),
     raisedBy: req.user.id,
     against: againstUserId || null,
     deliveryId: null,

@@ -1,6 +1,6 @@
 import { rewards } from '../models/Reward';
 import { inventory } from '../models/Inventory';
-import { generateId } from '../utils/helpers';
+import { nextId, PREFIX } from '../utils/idGenerator.js';
 
 /**
  * Reward Engine — tracks a simple point counter per user.
@@ -28,7 +28,7 @@ export class RewardEngine {
     let reward = rewards.find((r) => r.userId === userId);
     if (!reward) {
       reward = {
-        _id: generateId(),
+        _id: nextId(PREFIX.REWARD),
         userId,
         totalPoints: 0,
         currentStreak: 0,

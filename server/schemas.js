@@ -90,6 +90,12 @@ export const assignDeliverySchema = z.object({
   deliveryWorkerId: z.string().min(1),
 });
 
+export const recyclerQualitySchema = z.object({
+  inventoryId: z.string().min(1),
+  technicianName: z.string().min(2).max(100),
+  qualityRating: z.number().int().min(1).max(10),
+});
+
 export const recyclerRequestSchema = z.object({
   category: z.string().min(1).max(100),
   quantity: z.number().positive().max(10_000_000),

@@ -37,12 +37,13 @@ const TABLES = [
     toRow: (r) => [r._id, r.name, r.email, r.password, r.phone ?? '', r.role, r.trustLevel ?? 'standard', JSON.stringify(r.location ?? {}), r.avatarUrl ?? null, r.isActive ?? true, r.createdAt, r.updatedAt],
   },
   {
-    name: 'intents',
+    // Table renamed intents -> usr_req_items; in-memory array stays `intents`.
+    name: 'usr_req_items',
     array: intents,
-    columns: ['id', 'user_id', 'type', 'items', 'status', 'assigned_collector', 'location', 'created_at', 'updated_at'],
+    columns: ['id', 'user_id', 'username', 'type', 'items', 'status', 'assigned_collector', 'location', 'created_at', 'updated_at'],
     jsonb: ['items', 'location'],
-    fromRow: (r) => ({ _id: r.id, userId: r.user_id, type: r.type, items: r.items, status: r.status, assignedCollector: r.assigned_collector, location: r.location, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at) }),
-    toRow: (r) => [r._id, nz(r.userId), r.type, JSON.stringify(arr(r.items)), r.status ?? 'submitted', nz(r.assignedCollector), JSON.stringify(r.location ?? {}), r.createdAt, r.updatedAt],
+    fromRow: (r) => ({ _id: r.id, userId: r.user_id, username: r.username, type: r.type, items: r.items, status: r.status, assignedCollector: r.assigned_collector, location: r.location, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at) }),
+    toRow: (r) => [r._id, nz(r.userId), nz(r.username), r.type, JSON.stringify(arr(r.items)), r.status ?? 'submitted', nz(r.assignedCollector), JSON.stringify(r.location ?? {}), r.createdAt, r.updatedAt],
   },
   {
     name: 'demands',
@@ -55,10 +56,10 @@ const TABLES = [
   {
     name: 'inventory',
     array: inventory,
-    columns: ['id', 'qr_code', 'intent_id', 'category', 'claimed_category', 'actual_qty', 'claimed_qty', 'unit', 'weight_kg', 'condition', 'status', 'source_user_id', 'collector_id', 'hub_id', 'delivery_worker_id', 'recycler_id', 'matched_demand_id', 'verification_photos', 'traceability', 'created_at', 'updated_at'],
+    columns: ['id', 'qr_code', 'intent_id', 'category', 'claimed_category', 'actual_qty', 'claimed_qty', 'unit', 'weight_kg', 'condition', 'status', 'source_user_id', 'collector_id', 'hub_id', 'delivery_worker_id', 'recycler_id', 'matched_demand_id', 'verification_photos', 'traceability', 'quality_rating', 'technician_name', 'created_at', 'updated_at'],
     jsonb: ['traceability'],
-    fromRow: (r) => ({ _id: r.id, qrCode: r.qr_code, intentId: r.intent_id, category: r.category, claimedCategory: r.claimed_category, actualQty: r.actual_qty, claimedQty: r.claimed_qty, unit: r.unit, weightKg: r.weight_kg, condition: r.condition, status: r.status, sourceUserId: r.source_user_id, collectorId: r.collector_id, hubId: r.hub_id, deliveryWorkerId: r.delivery_worker_id, recyclerId: r.recycler_id, matchedDemandId: r.matched_demand_id, verificationPhotos: r.verification_photos, traceability: r.traceability, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at) }),
-    toRow: (r) => [r._id, nz(r.qrCode), nz(r.intentId), r.category, r.claimedCategory, r.actualQty, r.claimedQty, r.unit, r.weightKg ?? null, r.condition, r.status, nz(r.sourceUserId), nz(r.collectorId), nz(r.hubId), nz(r.deliveryWorkerId), nz(r.recyclerId), nz(r.matchedDemandId), arr(r.verificationPhotos), JSON.stringify(arr(r.traceability)), r.createdAt, r.updatedAt],
+    fromRow: (r) => ({ _id: r.id, qrCode: r.qr_code, intentId: r.intent_id, category: r.category, claimedCategory: r.claimed_category, actualQty: r.actual_qty, claimedQty: r.claimed_qty, unit: r.unit, weightKg: r.weight_kg, condition: r.condition, status: r.status, sourceUserId: r.source_user_id, collectorId: r.collector_id, hubId: r.hub_id, deliveryWorkerId: r.delivery_worker_id, recyclerId: r.recycler_id, matchedDemandId: r.matched_demand_id, verificationPhotos: r.verification_photos, traceability: r.traceability, qualityRating: r.quality_rating, technicianName: r.technician_name, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at) }),
+    toRow: (r) => [r._id, nz(r.qrCode), nz(r.intentId), r.category, r.claimedCategory, r.actualQty, r.claimedQty, r.unit, r.weightKg ?? null, r.condition, r.status, nz(r.sourceUserId), nz(r.collectorId), nz(r.hubId), nz(r.deliveryWorkerId), nz(r.recyclerId), nz(r.matchedDemandId), arr(r.verificationPhotos), JSON.stringify(arr(r.traceability)), r.qualityRating ?? null, r.technicianName ?? null, r.createdAt, r.updatedAt],
   },
   {
     name: 'boxes',
@@ -120,6 +121,25 @@ const TABLES = [
 
 let hydrated = false;
 
+/**
+ * Apply additive, idempotent column migrations the running app depends on.
+ * Kept inline (no schema.sql file read) so it works in the bundled prod build.
+ * Must run before flushAll(), whose INSERT lists these columns.
+ */
+export async function ensureSchema() {
+  const stmts = [
+    'alter table inventory add column if not exists quality_rating integer',
+    'alter table inventory add column if not exists technician_name text',
+  ];
+  for (const sql of stmts) {
+    try {
+      await pool.query(sql);
+    } catch (e) {
+      console.error('[pgStore] ensureSchema failed:', sql, '->', e.message);
+    }
+  }
+}
+
 /** Load all tables from Postgres into the in-memory model arrays. */
 export async function hydrateAll() {
   for (const t of TABLES) {
@@ -135,8 +155,17 @@ export async function hydrateAll() {
 export async function flushAll() {
   // Safety: never wipe the DB if we haven't successfully hydrated yet.
   if (!hydrated) return;
-  const client = await pool.connect();
+  let client;
+  let hadError = false;
   try {
+    client = await pool.connect();
+    // The Supabase pooler can drop a connection mid-flush. A checked-out client
+    // emits 'error' for that; WITHOUT a listener Node turns it into an unhandled
+    // exception and kills the whole server. This listener keeps us alive.
+    client.on('error', (e) => {
+      hadError = true;
+      console.error('[pgStore] flush client error (ignored, changes kept in memory):', e.message);
+    });
     await client.query('begin');
     for (const t of [...TABLES].reverse()) await client.query(`delete from ${t.name}`);
     for (const t of TABLES) {
@@ -147,10 +176,12 @@ export async function flushAll() {
     }
     await client.query('commit');
   } catch (e) {
-    await client.query('rollback').catch(() => {});
+    hadError = true;
+    if (client) await client.query('rollback').catch(() => {});
     console.error('[pgStore] flush failed (changes kept in memory, retried on next write):', e.message);
   } finally {
-    client.release();
+    // Pass the error to release() so a broken connection is discarded, not reused.
+    if (client) client.release(hadError || undefined);
   }
 }
 

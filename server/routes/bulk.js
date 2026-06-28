@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { intents } from '../models/Intent';
 import { inventory } from '../models/Inventory';
 import { verifyAuth, requireRole } from '../middleware/auth';
-import { generateId, generateQRCode } from '../utils/helpers';
+import { generateQRCode } from '../utils/helpers';
+import { nextId, PREFIX } from '../utils/idGenerator.js';
 
 const router = Router();
 
@@ -19,7 +20,7 @@ router.post('/intent', verifyAuth, requireRole('bulk_generator'), (req, res) => 
     }
 
     const intent = {
-      _id: generateId(),
+      _id: nextId(PREFIX.INTENT),
       userId: req.user.id,
       type: 'bulk_generator',
       items: items.map(item => ({
@@ -38,9 +39,10 @@ router.post('/intent', verifyAuth, requireRole('bulk_generator'), (req, res) => 
 
     // Create inventory items for bulk
     for (const item of items) {
+      const invId = nextId(PREFIX.INVENTORY);
       const inventoryItem = {
-        _id: generateId(),
-        qrCode: generateQRCode(),
+        _id: invId,
+        qrCode: generateQRCode(invId),
         intentId: intent._id,
         category: item.category,
         actualQty: item.estimatedQty,

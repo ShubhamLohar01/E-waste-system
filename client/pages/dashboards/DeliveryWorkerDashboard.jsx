@@ -3,11 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import NotificationsBell from '@/components/NotificationsBell';
+import GoogleMapDirections from '@/components/GoogleMapDirections';
 import {
   Package, LogOut, Truck, MapPin, Phone, Building2, CheckCircle2,
-  Loader2, Camera, ImagePlus, IndianRupee, TrendingUp,
+  Loader2, Camera, RotateCcw, Clock, IndianRupee, TrendingUp,
+  Navigation, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import CameraCapture from '@/components/CameraCapture';
 
 export default function DeliveryWorkerDashboard() {
   const { user, logout } = useAuth();
@@ -17,6 +20,15 @@ export default function DeliveryWorkerDashboard() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [photos, setPhotos] = useState({});
+  /** Which directions leg is expanded per task: 'hub' | 'recycler' | undefined */
+  const [directionsView, setDirectionsView] = useState({});
+  /** Proof key (`${taskId}-${mode}`) whose live camera dialog is open, or null */
+  const [cameraFor, setCameraFor] = useState(null);
+  /** Which completed task row is expanded, or null */
+  const [openDone, setOpenDone] = useState(null);
+
+  const toggleDirections = (taskId, which) =>
+    setDirectionsView((s) => ({ ...s, [taskId]: s[taskId] === which ? undefined : which }));
 
   const refresh = useCallback(async () => {
     try {
@@ -40,15 +52,6 @@ export default function DeliveryWorkerDashboard() {
     const id = setInterval(refresh, 30_000);
     return () => clearInterval(id);
   }, [refresh]);
-
-  const handlePhoto = (id, e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setPhotos((p) => ({ ...p, [id]: reader.result }));
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
 
   const act = async (taskId, mode) => {
     const photo = photos[`${taskId}-${mode}`];
@@ -182,6 +185,54 @@ export default function DeliveryWorkerDashboard() {
                     </Box>
                   </div>
 
+                  {/* Directions — navigate from the agent's current location to hub / recycler */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium flex items-center gap-1.5">
+                        <Navigation className="w-4 h-4 text-primary" /> Directions
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={directionsView[t._id] === 'hub' ? 'default' : 'outline'}
+                        onClick={() => toggleDirections(t._id, 'hub')}
+                        disabled={!hasCoords(t.hubLocation)}
+                        title={hasCoords(t.hubLocation) ? 'Route to the pickup hub' : 'Hub has no map coordinates'}
+                        className="gap-1.5"
+                      >
+                        <Building2 className="w-3.5 h-3.5" /> To Hub
+                        {directionsView[t._id] === 'hub' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={directionsView[t._id] === 'recycler' ? 'default' : 'outline'}
+                        onClick={() => toggleDirections(t._id, 'recycler')}
+                        disabled={!hasCoords(t.recyclerLocation)}
+                        title={hasCoords(t.recyclerLocation) ? 'Route to the recycler' : 'Recycler has no map coordinates'}
+                        className="gap-1.5"
+                      >
+                        <Truck className="w-3.5 h-3.5" /> To Recycler
+                        {directionsView[t._id] === 'recycler' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      </Button>
+                    </div>
+
+                    {directionsView[t._id] === 'hub' && hasCoords(t.hubLocation) && (
+                      <GoogleMapDirections
+                        destination={{ lat: t.hubLocation.lat, lng: t.hubLocation.lng, address: t.hubAddress || t.hubName }}
+                        originFallback={user?.location}
+                        height={300}
+                      />
+                    )}
+                    {directionsView[t._id] === 'recycler' && hasCoords(t.recyclerLocation) && (
+                      <GoogleMapDirections
+                        destination={{ lat: t.recyclerLocation.lat, lng: t.recyclerLocation.lng, address: t.recyclerAddress || t.recyclerName }}
+                        originFallback={user?.location}
+                        height={300}
+                      />
+                    )}
+                  </div>
+
                   <div>
                     <p className="text-sm font-medium mb-1">Manifest ({t.manifest.length} items)</p>
                     <div className="grid sm:grid-cols-2 gap-2">
@@ -207,7 +258,7 @@ export default function DeliveryWorkerDashboard() {
                       actionLabel="Confirm hub pickup"
                       photos={photos}
                       actionLoading={actionLoading}
-                      onFile={handlePhoto}
+                      onOpenCamera={setCameraFor}
                       onAct={act}
                     />
                   )}
@@ -219,7 +270,7 @@ export default function DeliveryWorkerDashboard() {
                       actionLabel="Confirm recycler drop-off"
                       photos={photos}
                       actionLoading={actionLoading}
-                      onFile={handlePhoto}
+                      onOpenCamera={setCameraFor}
                       onAct={act}
                     />
                   )}
@@ -232,36 +283,38 @@ export default function DeliveryWorkerDashboard() {
         {done.length > 0 && (
           <section>
             <h2 className="text-xl font-bold mb-4">Completed</h2>
-            <div className="rounded-lg border border-border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="px-4 py-2 text-left font-semibold">Task</th>
-                    <th className="px-4 py-2 text-left font-semibold">Hub → Recycler</th>
-                    <th className="px-4 py-2 text-left font-semibold">Items</th>
-                    <th className="px-4 py-2 text-left font-semibold">Completed</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {done.map((t) => (
-                    <tr key={t._id}>
-                      <td className="px-4 py-2 font-mono text-xs">{t._id.slice(0, 10)}…</td>
-                      <td className="px-4 py-2">
-                        {t.hubName} → {t.recyclerName}
-                      </td>
-                      <td className="px-4 py-2">{t.manifest.length}</td>
-                      <td className="px-4 py-2 text-muted-foreground">
-                        {new Date(t.updatedAt).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-3">
+              {done.map((t) => (
+                <CompletedCard
+                  key={t._id}
+                  t={t}
+                  open={openDone === t._id}
+                  onToggle={() => setOpenDone((id) => (id === t._id ? null : t._id))}
+                />
+              ))}
             </div>
           </section>
         )}
       </main>
+
+      {/* Live camera for pickup / drop-off proof — uploading a saved file is intentionally not offered */}
+      <CameraCapture
+        open={!!cameraFor}
+        onClose={() => setCameraFor(null)}
+        onCapture={(dataUrl) => setPhotos((p) => ({ ...p, [cameraFor]: dataUrl }))}
+        title={cameraFor?.endsWith('-pickup') ? 'Hub pickup — live photo proof' : 'Recycler drop-off — live photo proof'}
+      />
     </div>
+  );
+}
+
+// A location is routable only if it has real (non-zero) coordinates.
+function hasCoords(loc) {
+  return (
+    loc &&
+    typeof loc.lat === 'number' &&
+    typeof loc.lng === 'number' &&
+    !(loc.lat === 0 && loc.lng === 0)
   );
 }
 
@@ -286,38 +339,39 @@ function Box({ title, icon, children }) {
     </div>
   );
 }
-function ProofBlock({ taskId, mode, label, actionLabel, photos, actionLoading, onFile, onAct }) {
+function ProofBlock({ taskId, mode, label, actionLabel, photos, actionLoading, onOpenCamera, onAct }) {
   const key = `${taskId}-${mode}`;
+  const photo = photos[key];
   return (
     <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/50 space-y-3">
       <p className="text-sm font-medium flex items-center gap-2">
-        <Camera className="w-4 h-4 text-amber-700" /> {label} — photo proof required
+        <Camera className="w-4 h-4 text-amber-700" /> {label} — live photo proof required
       </p>
-      <input
-        type="file"
-        accept="image/*"
-        capture="environment"
-        id={`file-${key}`}
-        className="hidden"
-        onChange={(e) => onFile(key, e)}
-      />
-      {photos[key] ? (
+      <p className="text-xs text-amber-700/80">
+        Take the photo now with your camera. Uploading a saved image is disabled so proof can’t be faked.
+      </p>
+      {photo ? (
         <div className="flex items-center gap-3">
-          <img src={photos[key]} alt="proof" className="w-20 h-20 object-cover rounded border" />
-          <label htmlFor={`file-${key}`} className="text-sm text-primary font-medium cursor-pointer flex items-center gap-1">
-            <ImagePlus className="w-4 h-4" /> Change
-          </label>
+          <img src={photo} alt="proof" className="w-20 h-20 object-cover rounded border" />
+          <button
+            type="button"
+            onClick={() => onOpenCamera(key)}
+            className="text-sm text-primary font-medium cursor-pointer flex items-center gap-1"
+          >
+            <RotateCcw className="w-4 h-4" /> Retake
+          </button>
         </div>
       ) : (
-        <label
-          htmlFor={`file-${key}`}
+        <button
+          type="button"
+          onClick={() => onOpenCamera(key)}
           className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-amber-300 bg-white text-amber-800 font-medium cursor-pointer hover:bg-amber-100 text-sm"
         >
-          <Camera className="w-4 h-4" /> Take / upload photo
-        </label>
+          <Camera className="w-4 h-4" /> Capture live photo
+        </button>
       )}
       <Button
-        disabled={!photos[key] || actionLoading === key}
+        disabled={!photo || actionLoading === key}
         onClick={() => onAct(taskId, mode)}
         className="gap-2"
       >
@@ -328,6 +382,114 @@ function ProofBlock({ taskId, mode, label, actionLabel, photos, actionLoading, o
         )}
         {actionLabel}
       </Button>
+    </div>
+  );
+}
+
+function CompletedCard({ t, open, onToggle }) {
+  const fmt = (ts) => (ts ? new Date(ts).toLocaleString() : '—');
+  return (
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/30"
+      >
+        <div className="min-w-0">
+          <p className="font-medium truncate">
+            {t.hubName || '—'} → {t.recyclerName || '—'}
+          </p>
+          <p className="text-xs text-muted-foreground font-mono truncate">
+            {t._id.slice(0, 12)}… · {t.manifest.length} item(s) · {new Date(t.updatedAt).toLocaleDateString()}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
+            Delivered
+          </span>
+          {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </div>
+      </button>
+
+      {open && (
+        <div className="border-t border-border px-4 py-4 space-y-4">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <ProofDetail
+              title="Picked up from hub"
+              proof={t.pickupProof || {}}
+              place={t.hubName}
+              address={t.hubAddress}
+              phone={t.hubPhone}
+              fmt={fmt}
+            />
+            <ProofDetail
+              title="Dropped at recycler"
+              proof={t.dropoffProof || {}}
+              place={t.recyclerName}
+              address={t.recyclerAddress}
+              phone={t.recyclerPhone}
+              fmt={fmt}
+            />
+          </div>
+
+          <div>
+            <p className="text-sm font-medium mb-1">Manifest ({t.manifest.length} items)</p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              {t.manifest.map((m) => (
+                <div
+                  key={m.inventoryId}
+                  className="flex items-center justify-between p-2.5 rounded bg-muted/30 text-sm"
+                >
+                  <span>{m.category}</span>
+                  <span className="font-semibold">
+                    {m.qty} {m.unit}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProofDetail({ title, proof, place, address, phone, fmt }) {
+  return (
+    <div className="p-3 rounded-lg bg-muted/30 space-y-2">
+      <p className="text-xs font-semibold text-muted-foreground">{title}</p>
+      <p className="font-medium text-sm">{place || '—'}</p>
+      {address && (
+        <p className="text-xs text-muted-foreground flex items-start gap-1">
+          <MapPin className="w-3 h-3 mt-0.5 shrink-0" /> {address}
+        </p>
+      )}
+      {phone && (
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          <Phone className="w-3 h-3" /> {phone}
+        </p>
+      )}
+      <div className="flex items-center gap-3 pt-1">
+        {proof.photo ? (
+          <a href={proof.photo} target="_blank" rel="noreferrer" title="Open full proof photo">
+            <img src={proof.photo} alt={title} className="w-16 h-16 object-cover rounded border" />
+          </a>
+        ) : (
+          <div className="w-16 h-16 rounded border border-dashed flex items-center justify-center text-[10px] text-muted-foreground text-center px-1">
+            No photo
+          </div>
+        )}
+        <div className="text-xs space-y-0.5">
+          <p className="flex items-center gap-1 text-muted-foreground">
+            <Clock className="w-3 h-3" /> {fmt(proof.timestamp)}
+          </p>
+          {proof.qrScanned && (
+            <p className="text-green-700 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> {proof.scannedCount} QR scanned
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

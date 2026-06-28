@@ -1,2 +1,2 @@
-import { loadCollection } from '../lib/jsonDb.js';
-export const disputes = loadCollection('disputes');
+// Filled from Postgres at boot by pgStore.hydrateAll(); mutated in place by routes.
+export const disputes = [];

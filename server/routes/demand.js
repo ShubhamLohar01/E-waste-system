@@ -3,7 +3,7 @@ import { demands } from '../models/Demand';
 import { inventory } from '../models/Inventory';
 import { deliveries } from '../models/Delivery';
 import { verifyAuth, requireRole } from '../middleware/auth';
-import { generateId } from '../utils/helpers';
+import { nextId, PREFIX } from '../utils/idGenerator.js';
 
 const router = Router();
 
@@ -20,7 +20,7 @@ router.post('/', verifyAuth, requireRole('recycler'), (req, res) => {
     }
 
     const demand = {
-      _id: generateId(),
+      _id: nextId(PREFIX.DEMAND),
       recyclerId: req.user.id,
       category,
       quantityNeeded,

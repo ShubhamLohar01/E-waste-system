@@ -7,7 +7,7 @@ import { verifyAuth, requireRole } from '../middleware/auth';
 import { nextId, PREFIX } from '../utils/idGenerator.js';
 import { maskCode } from '../utils/helpers.js';
 import { notify } from '../services/notificationService.js';
-import { validate, assignDeliverySchema, recyclerRequestSchema, acknowledgeBoxSchema } from '../schemas.js';
+import { validate, assignDeliverySchema, recyclerRequestSchema, acknowledgeBoxSchema, recyclerQualitySchema } from '../schemas.js';
 import { boxes } from '../models/Box';
 import { verifyBoxQr } from '../utils/boxCodes.js';
 
@@ -148,10 +148,10 @@ router.post('/assign-delivery', verifyAuth, requireRole('recycler'), validate(as
 
     const items = inventoryIds
       .map((id) => inventory.find((i) => i._id === id))
-      .filter((i) => i && i.recyclerId === req.user.id && i.status === 'matched');
+      .filter((i) => i && i.recyclerId === req.user.id && i.status === 'matched' && !i.deliveryWorkerId);
 
     if (items.length === 0) {
-      return res.status(400).json({ error: 'No eligible items (must be assigned to you and status=matched)' });
+      return res.status(400).json({ error: 'No eligible items (must be assigned to you, status=matched, not yet dispatched)' });
     }
 
     const pickupHubId = items[0].hubId;
@@ -186,6 +186,10 @@ router.post('/assign-delivery', verifyAuth, requireRole('recycler'), validate(as
 
     const me = users.find((u) => u._id === req.user.id);
     items.forEach((item) => {
+      // Assigning a delivery worker moves the item out of the recycler's
+      // selectable "awaiting pickup" list into the read-only "Dispatched"
+      // section (discriminated client-side by deliveryWorkerId). Status stays
+      // 'matched' until the worker's pickup sets it to 'in_transit'.
       item.deliveryWorkerId = deliveryWorkerId;
       item.traceability.push({
         actor: req.user.id,
@@ -260,6 +264,9 @@ router.get('/boxes', verifyAuth, requireRole('recycler'), (req, res) => {
           transactionNo: b.transactionNo,
           total: 0,
           acknowledged: 0,
+          // Quality assessment recorded once all boxes for this item are in.
+          qualityRating: it?.qualityRating ?? null,
+          technicianName: it?.technicianName ?? null,
           boxes: [],
         };
       }
@@ -340,6 +347,41 @@ router.post('/acknowledge', verifyAuth, requireRole('recycler'), validate(acknow
       total: itemBoxes.length,
       complete,
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/recycler/quality — record a technician's name and 1–10 quality
+ * rating for a received item. Allowed once the item has reached the recycler
+ * (status delivered/processed).
+ */
+router.post('/quality', verifyAuth, requireRole('recycler'), validate(recyclerQualitySchema), (req, res) => {
+  try {
+    const { inventoryId, technicianName, qualityRating } = req.body;
+    const item = inventory.find((i) => i._id === inventoryId);
+    if (!item || item.recyclerId !== req.user.id) {
+      return res.status(404).json({ error: 'Item not found or not assigned to you.' });
+    }
+    if (!['delivered', 'processed'].includes(item.status)) {
+      return res.status(409).json({ error: 'Item has not been received yet.' });
+    }
+
+    const me = users.find((u) => u._id === req.user.id);
+    const now = new Date().toISOString();
+    item.qualityRating = qualityRating;
+    item.technicianName = technicianName;
+    item.traceability.push({
+      actor: req.user.id,
+      actorName: me?.name,
+      action: 'quality_assessed',
+      note: `Quality ${qualityRating}/10 by ${technicianName}`,
+      timestamp: now,
+    });
+    item.updatedAt = now;
+
+    res.json({ message: 'Quality recorded', inventoryId, qualityRating, technicianName });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

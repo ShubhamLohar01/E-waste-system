@@ -23,11 +23,14 @@ import {
   MapPin,
   Loader2,
   Coins,
+  Camera,
+  FileText,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import GoogleMapPicker from "@/components/GoogleMapPicker";
 import NotificationsBell from "@/components/NotificationsBell";
 import RaiseDisputeDialog from "@/components/RaiseDisputeDialog";
+import CameraCapture from "@/components/CameraCapture";
 
 const CATEGORIES = [
   "Old Laptops",
@@ -36,6 +39,7 @@ const CATEGORIES = [
   "Monitors",
   "Batteries",
   "Circuit Boards",
+  "Semiconductors",
   "Printers",
   "Keyboards & Mouse",
   "Other",
@@ -59,6 +63,8 @@ export default function SmallUserDashboard() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Which item the in-app camera is capturing for: { idx, mode: 'photo' | 'invoice' } | null
+  const [cameraTarget, setCameraTarget] = useState(null);
 
   const defaultFormItem = () => ({
     category: CATEGORIES[0],
@@ -68,6 +74,7 @@ export default function SmallUserDashboard() {
     estimatedQty: 1,
     unit: "pieces",
     photos: [],
+    invoice: null, // { name, dataUrl } — optional PDF/image, base64 data-URL (S3 URL later)
     purchaseDate: "",
   });
 
@@ -163,6 +170,61 @@ export default function SmallUserDashboard() {
     });
   };
 
+  const handleInvoiceUpload = (itemIdx, e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const isAllowed = file.type === "application/pdf" || file.type.startsWith("image/");
+    if (!isAllowed) {
+      alert("Invoice must be a PDF or image (JPG/PNG).");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Invoice must be under 10MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormItems((prev) => {
+        const updated = [...prev];
+        updated[itemIdx] = {
+          ...updated[itemIdx],
+          invoice: { name: file.name, dataUrl: reader.result },
+        };
+        return updated;
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeInvoice = (itemIdx) => {
+    setFormItems((prev) => {
+      const updated = [...prev];
+      updated[itemIdx] = { ...updated[itemIdx], invoice: null };
+      return updated;
+    });
+  };
+
+  // Capture from the in-app camera dialog — routed by cameraTarget.mode.
+  const handleCameraCapture = (dataUrl) => {
+    if (!cameraTarget) return;
+    const { idx, mode } = cameraTarget;
+    setFormItems((prev) => {
+      const updated = [...prev];
+      if (mode === "invoice") {
+        updated[idx] = {
+          ...updated[idx],
+          invoice: { name: `invoice-photo-${idx + 1}.jpg`, dataUrl },
+        };
+      } else {
+        updated[idx] = { ...updated[idx], photos: [...updated[idx].photos, dataUrl] };
+      }
+      return updated;
+    });
+  };
+
+  const isPdfDataUrl = (dataUrl) => typeof dataUrl === "string" && dataUrl.startsWith("data:application/pdf");
+
   const addFormItem = () => {
     setFormItems((prev) => [...prev, defaultFormItem()]);
   };
@@ -201,6 +263,7 @@ export default function SmallUserDashboard() {
       estimatedQty: item.estimatedQty,
       unit: item.unit,
       photos: item.photos,
+      invoice: item.invoice || undefined,
       purchaseDate: item.purchaseDate || undefined,
     }));
 
@@ -463,6 +526,26 @@ export default function SmallUserDashboard() {
                         </div>
                       )}
 
+                      {/* Invoice attachments */}
+                      {intent.items.some((i) => i.invoice) && (
+                        <div className="flex gap-2 flex-wrap mb-3">
+                          {intent.items.map((item, idx) =>
+                            item.invoice ? (
+                              <a
+                                key={idx}
+                                href={item.invoice.url || item.invoice.dataUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border bg-background text-xs text-foreground hover:border-primary/50 hover:text-primary transition-colors"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                {item.category} invoice
+                              </a>
+                            ) : null
+                          )}
+                        </div>
+                      )}
+
                       {intent.location?.address && intent.location.address !== "Not specified" && (
                         <div className="flex items-center gap-1 text-sm text-muted-foreground">
                           <MapPin className="w-3.5 h-3.5" />
@@ -694,7 +777,73 @@ export default function SmallUserDashboard() {
                         className="hidden"
                       />
                     </label>
+                    <button
+                      type="button"
+                      onClick={() => setCameraTarget({ idx, mode: "photo" })}
+                      className="w-20 h-20 border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors"
+                    >
+                      <Camera className="w-5 h-5 text-muted-foreground mb-1" />
+                      <span className="text-[10px] text-muted-foreground">Camera</span>
+                    </button>
                   </div>
+                </div>
+
+                {/* Invoice (optional) */}
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Invoice{" "}
+                    <span className="text-muted-foreground font-normal">(optional — PDF or image)</span>
+                  </label>
+                  {item.invoice ? (
+                    <div className="flex items-center gap-3 p-2 rounded-lg border border-border bg-background">
+                      {isPdfDataUrl(item.invoice.dataUrl) ? (
+                        <div className="w-12 h-12 rounded-md border border-border bg-muted flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-6 h-6 text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <img
+                          src={item.invoice.dataUrl}
+                          alt="Invoice"
+                          className="w-12 h-12 object-cover rounded-md border border-border flex-shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-foreground truncate">{item.invoice.name}</p>
+                        <a
+                          href={item.invoice.dataUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary hover:underline"
+                        >
+                          View
+                        </a>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => removeInvoice(idx)}>
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-3">
+                      <label className="flex items-center gap-2 px-3 h-10 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors text-sm text-muted-foreground">
+                        <Upload className="w-4 h-4" />
+                        Upload PDF / image
+                        <input
+                          type="file"
+                          accept="application/pdf,image/*"
+                          onChange={(e) => handleInvoiceUpload(idx, e)}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setCameraTarget({ idx, mode: "invoice" })}
+                        className="flex items-center gap-2 px-3 h-10 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors text-sm text-muted-foreground"
+                      >
+                        <Camera className="w-4 h-4" />
+                        Take photo
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -728,6 +877,14 @@ export default function SmallUserDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* In-app camera for item photos and invoice snapshots */}
+      <CameraCapture
+        open={cameraTarget !== null}
+        onClose={() => setCameraTarget(null)}
+        onCapture={handleCameraCapture}
+        title={cameraTarget?.mode === "invoice" ? "Photograph invoice" : "Take a photo"}
+      />
     </div>
   );
 }

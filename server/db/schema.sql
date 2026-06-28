@@ -23,10 +23,11 @@ create table if not exists users (
   updated_at  timestamptz default now()
 );
 
--- 2. intents -------------------------------------------------------------
-create table if not exists intents (
+-- 2. usr_req_items (was: intents) --------------------------------------
+create table if not exists usr_req_items (
   id                 text primary key,
   user_id            text references users(id),
+  username           text,                        -- denormalized users.name at submit time
   type               text,
   items              jsonb default '[]'::jsonb,   -- [{ category, estimatedQty, unit, photos[] (S3), condition }]
   status             text default 'submitted',
@@ -54,7 +55,7 @@ create table if not exists demands (
 create table if not exists inventory (
   id                  text primary key,
   qr_code             text unique,
-  intent_id           text references intents(id),
+  intent_id           text references usr_req_items(id),
   category            text,
   claimed_category    text,
   actual_qty          numeric,
@@ -71,9 +72,15 @@ create table if not exists inventory (
   matched_demand_id   text references demands(id),
   verification_photos text[] default '{}',        -- S3 image urls
   traceability        jsonb default '[]'::jsonb,   -- [{ actor, actorName, action, timestamp }]
+  quality_rating      integer,                     -- recycler's 1–10 quality score on receipt
+  technician_name     text,                        -- recycler technician who assessed quality
   created_at          timestamptz default now(),
   updated_at          timestamptz default now()
 );
+
+-- Additive columns (safe on already-created tables) ----------------------
+alter table inventory add column if not exists quality_rating  integer;
+alter table inventory add column if not exists technician_name text;
 
 -- 5. deliveries ----------------------------------------------------------
 create table if not exists deliveries (
@@ -142,7 +149,7 @@ create table if not exists rewards (
 );
 
 -- Helpful indexes for common lookups -------------------------------------
-create index if not exists idx_intents_user        on intents(user_id);
+create index if not exists idx_intents_user        on usr_req_items(user_id);
 create index if not exists idx_inventory_status     on inventory(status);
 create index if not exists idx_inventory_source     on inventory(source_user_id);
 create index if not exists idx_inventory_intent     on inventory(intent_id);

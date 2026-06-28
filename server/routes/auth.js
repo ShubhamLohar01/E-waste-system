@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { users } from '../models/User';
 import { hashPassword, comparePassword, generateId } from '../utils/helpers';
+import { nextId, PREFIX } from '../utils/idGenerator.js';
 import {
   generateToken,
   generateVerificationToken,
@@ -19,7 +20,7 @@ import { validate, registerSchema, registerWithEmailSchema, profileUpdateSchema,
 const router = Router();
 
 // Shared rate limiters
-const loginLimiter = rateLimit({ windowMs: 15 * 60_000, max: 8 });
+const loginLimiter = rateLimit({ windowMs: 15 * 60_000, max: 50 });
 const otpSendLimiter = rateLimit({ windowMs: 60 * 60_000, max: 5, keyOn: 'email' });
 const otpVerifyLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, keyOn: 'email' });
 const registerLimiter = rateLimit({ windowMs: 60 * 60_000, max: 10 });
@@ -117,7 +118,7 @@ router.post('/register-with-email', registerLimiter, validate(registerWithEmailS
     }
     const randomPassword = await hashPassword(generateId() + Date.now());
     const user = {
-      _id: generateId(),
+      _id: nextId(PREFIX.USER),
       name: name.trim(),
       email,
       password: randomPassword,
@@ -132,7 +133,7 @@ router.post('/register-with-email', registerLimiter, validate(registerWithEmailS
     users.push(user);
     if (role === 'small_user') {
       const reward = {
-        _id: generateId(),
+        _id: nextId(PREFIX.REWARD),
         userId: user._id,
         totalPoints: 0,
         currentStreak: 0,
@@ -194,7 +195,7 @@ router.post('/register', registerLimiter, validate(registerSchema), async (req, 
 
     // Create user
     const user = {
-      _id: generateId(),
+      _id: nextId(PREFIX.USER),
       name,
       email,
       password: hashedPassword,
@@ -212,7 +213,7 @@ router.post('/register', registerLimiter, validate(registerSchema), async (req, 
     // Create reward record for small users
     if (role === 'small_user') {
       const reward = {
-        _id: generateId(),
+        _id: nextId(PREFIX.REWARD),
         userId: user._id,
         totalPoints: 0,
         currentStreak: 0,
@@ -327,7 +328,7 @@ router.post('/google', async (req, res) => {
       }
     } else {
       user = {
-        _id: generateId(),
+        _id: nextId(PREFIX.USER),
         name: payload.name || email.split('@')[0],
         email,
         password: '', // no password for Google users
@@ -341,7 +342,7 @@ router.post('/google', async (req, res) => {
       };
       users.push(user);
       const reward = {
-        _id: generateId(),
+        _id: nextId(PREFIX.REWARD),
         userId: user._id,
         totalPoints: 0,
         currentStreak: 0,

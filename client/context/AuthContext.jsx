@@ -198,6 +198,10 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
+  /** Merge a partial update into the current user (e.g. after saving location). */
+  const updateUser = (partial) =>
+    setUser((prev) => (prev ? { ...prev, ...partial } : prev));
+
   const logout = async () => {
     try {
       const t = localStorage.getItem('auth_token');
@@ -229,6 +233,7 @@ export function AuthProvider({ children }) {
         sendEmailCode,
         verifyEmailCode,
         registerWithEmail,
+        updateUser,
         logout,
         error,
       }}

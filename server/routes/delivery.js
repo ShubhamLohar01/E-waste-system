@@ -26,9 +26,11 @@ router.get('/tasks', verifyAuth, requireRole('delivery_worker'), (req, res) => {
           hubName: hub?.name,
           hubAddress: hub?.location?.address,
           hubPhone: hub?.phone,
+          hubLocation: hub?.location || null, // { lat, lng, address } for directions
           recyclerName: recycler?.name,
           recyclerAddress: recycler?.location?.address,
           recyclerPhone: recycler?.phone,
+          recyclerLocation: recycler?.location || null, // { lat, lng, address } for directions
           items,
         };
       })

@@ -25,6 +25,7 @@ router.get('/incoming', verifyAuth, requireRole('hub'), (req, res) => {
       .filter(
         (i) =>
           (i.status === 'at_hub' && (!i.hubId || i.hubId === req.user.id)) ||
+          (i.status === 'received' && i.hubId === req.user.id) ||
           (i.status === 'pending_print' && i.hubId === req.user.id),
       )
       .map((item) => {
@@ -45,6 +46,58 @@ router.get('/incoming', verifyAuth, requireRole('hub'), (req, res) => {
 });
 
 /**
+ * POST /api/hub/receive — hub confirms physical receipt of delivered items.
+ * Moves at_hub → received and records who/when in traceability. This must happen
+ * before an item can be verified.
+ */
+router.post('/receive', verifyAuth, requireRole('hub'), (req, res) => {
+  try {
+    const { inventoryIds } = req.body;
+    if (!Array.isArray(inventoryIds) || inventoryIds.length === 0) {
+      return res.status(400).json({ error: 'inventoryIds (non-empty array) required' });
+    }
+
+    const now = new Date().toISOString();
+    const me = users.find((u) => u._id === req.user.id);
+    const received = [];
+    const collectorIds = new Set();
+
+    for (const id of inventoryIds) {
+      const item = inventory.find((i) => i._id === id);
+      if (!item || item.status !== 'at_hub') continue;
+      if (item.hubId && item.hubId !== req.user.id) continue;
+      item.status = 'received';
+      item.hubId = req.user.id;
+      item.traceability.push({
+        actor: req.user.id,
+        actorName: me?.name,
+        action: 'received_at_hub',
+        timestamp: now,
+      });
+      item.updatedAt = now;
+      received.push(item);
+      if (item.collectorId) collectorIds.add(item.collectorId);
+    }
+
+    if (received.length === 0) {
+      return res.status(404).json({ error: 'No eligible items to receive (must be delivered to your hub).' });
+    }
+
+    collectorIds.forEach((cid) =>
+      notify(cid, {
+        type: 'hub_received',
+        title: 'Hub received your delivery',
+        message: `${me?.name || 'The hub'} confirmed receipt of ${received.length} item(s). They will be verified shortly.`,
+      })
+    );
+
+    res.json({ message: `Received ${received.length} item(s)`, receivedCount: received.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/hub/verify — STAGE for printing. Records actual qty/weight/condition,
  * sets the item to pending_print, and creates the box rows for preview.
  * The item is NOT verified until /confirm-print is called.
@@ -56,6 +109,10 @@ router.post('/verify', verifyAuth, requireRole('hub'), validate(hubVerifySchema)
     if (!item) return res.status(404).json({ error: 'Inventory item not found' });
     if (item.status === 'verified') {
       return res.status(409).json({ error: 'Item is already verified.' });
+    }
+    // Two-step handshake: items must be received before they can be verified.
+    if (item.status !== 'received' && item.status !== 'pending_print') {
+      return res.status(409).json({ error: 'Receive the items first before verifying.' });
     }
 
     const now = new Date().toISOString();

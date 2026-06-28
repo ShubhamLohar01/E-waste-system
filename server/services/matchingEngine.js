@@ -1,7 +1,7 @@
 import { demands } from '../models/Demand';
 import { inventory } from '../models/Inventory';
 import { deliveries } from '../models/Delivery';
-import { generateId } from '../utils/helpers';
+import { nextId, PREFIX } from '../utils/idGenerator.js';
 
 /**
  * Matching Engine - Core business logic
@@ -89,7 +89,7 @@ export class MatchingEngine {
     const matchedItems = inventory.filter((i) => demand.matchedInventory.includes(i._id));
 
     const delivery = {
-      _id: generateId(),
+      _id: nextId(PREFIX.DELIVERY),
       demandId: demand._id,
       deliveryWorkerId,
       pickupHub: pickupHubId,

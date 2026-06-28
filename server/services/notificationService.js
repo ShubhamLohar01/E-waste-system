@@ -1,10 +1,10 @@
 import { notifications } from '../models/Notification.js';
-import { generateId } from '../utils/helpers.js';
+import { nextId, PREFIX } from '../utils/idGenerator.js';
 
 export function notify(userId, { title, message, type = 'info', relatedId = null }) {
   if (!userId) return;
   const note = {
-    _id: generateId(),
+    _id: nextId(PREFIX.NOTIFICATION),
     userId,
     title: String(title || 'Notification'),
     message: String(message || ''),

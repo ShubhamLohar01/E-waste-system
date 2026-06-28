@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { Printer } from 'lucide-react';
 import { Button } from './ui/button';
 
 /**
- * Printable QR sticker. The QR image comes from a public QR-image endpoint so
- * no extra npm dep is needed.
+ * Printable single QR sticker. The QR image is generated LOCALLY with the
+ * `qrcode` package (no external service), so it works offline.
  *
  * Props:
  *   qrCode     string (required) — the data encoded in the QR
@@ -23,8 +25,20 @@ export default function QRSticker({
   hubName,
   showPrintButton = true,
 }) {
+  const [qrImage, setQrImage] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!qrCode) return;
+    QRCode.toDataURL(qrCode, { width: 180, margin: 1 })
+      .then((url) => !cancelled && setQrImage(url))
+      .catch(() => !cancelled && setQrImage(''));
+    return () => {
+      cancelled = true;
+    };
+  }, [qrCode]);
+
   if (!qrCode) return null;
-  const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=${encodeURIComponent(qrCode)}`;
 
   const handlePrint = () => {
     const html = `<!doctype html><html><head><title>${category} sticker</title>
@@ -62,7 +76,11 @@ export default function QRSticker({
 
   return (
     <div className="border border-border rounded-md p-3 bg-white text-black flex gap-3 items-center max-w-md">
-      <img src={qrImage} alt={`QR ${qrCode}`} className="w-28 h-28 flex-shrink-0" />
+      {qrImage ? (
+        <img src={qrImage} alt={`QR ${qrCode}`} className="w-28 h-28 flex-shrink-0" />
+      ) : (
+        <div className="w-28 h-28 flex-shrink-0 flex items-center justify-center text-xs text-gray-400">…</div>
+      )}
       <div className="flex-1 min-w-0">
         <p className="font-bold text-base truncate">{category}</p>
         <p className="text-sm">

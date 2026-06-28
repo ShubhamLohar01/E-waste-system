@@ -1,2 +1,2 @@
-import { loadCollection } from '../lib/jsonDb.js';
-export const intents = loadCollection('intents');
+// Filled from Postgres at boot by pgStore.hydrateAll(); mutated in place by routes.
+export const intents = [];

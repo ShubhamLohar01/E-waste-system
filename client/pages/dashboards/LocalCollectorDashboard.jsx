@@ -27,9 +27,9 @@ import { Link, useNavigate } from "react-router-dom";
 import NotificationsBell from "@/components/NotificationsBell";
 import RaiseDisputeDialog from "@/components/RaiseDisputeDialog";
 import GoogleMapDirections from "@/components/GoogleMapDirections";
+import CollectorLocationCard from "@/components/CollectorLocationCard";
 import CameraCapture from "@/components/CameraCapture";
-import { api } from "@/lib/api";
-import { Coins, Navigation, ChevronDown, ChevronUp, ExternalLink, Mail } from "lucide-react";
+import { Navigation, ChevronDown, ChevronUp, ExternalLink, Mail } from "lucide-react";
 
 export default function LocalCollectorDashboard() {
   const { user, token, logout } = useAuth();
@@ -38,7 +38,6 @@ export default function LocalCollectorDashboard() {
   const [pendingIntents, setPendingIntents] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [hubs, setHubs] = useState([]);
-  const [rewardPoints, setRewardPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
 
@@ -89,11 +88,6 @@ export default function LocalCollectorDashboard() {
         const data = await hubRes.json();
         setHubs(data.hubs || []);
       }
-      // My reward counter (via centralized api helper)
-      try {
-        const rw = await api.get("/api/rewards/mine");
-        setRewardPoints(rw?.totalPoints ?? 0);
-      } catch { /* ignore */ }
     } catch (err) {
       console.error("Failed to fetch data:", err);
     }
@@ -258,13 +252,6 @@ export default function LocalCollectorDashboard() {
             </div>
             <div className="flex items-center gap-3">
               <NotificationsBell />
-              <span
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-sm font-medium"
-                title="Your reward points"
-              >
-                <Coins className="w-4 h-4" />
-                {Math.round(rewardPoints)} pts
-              </span>
               <Link to="/profile">
                 <Button variant="outline" size="sm" className="hidden sm:inline-flex">Profile</Button>
               </Link>
@@ -285,6 +272,11 @@ export default function LocalCollectorDashboard() {
             <h1 className="text-3xl font-bold text-foreground mb-2">Collector Dashboard</h1>
             <p className="text-muted-foreground">Manage pickups, tag items, and deliver to hubs</p>
           </div>
+        </section>
+
+        {/* Live location — keeps the collector matchable to nearby small users */}
+        <section className="mb-10">
+          <CollectorLocationCard />
         </section>
 
         {/* Stats */}
@@ -861,12 +853,21 @@ export default function LocalCollectorDashboard() {
                 onChange={(e) => setSelectedHub(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:outline-none"
               >
-                {hubs.map((hub) => (
+                {hubs.map((hub, idx) => (
                   <option key={hub._id} value={hub._id}>
-                    {hub.name} — {hub.address}
+                    {idx === 0 ? "★ " : ""}{hub.name} — {hub.address}
+                    {hub.distanceKm != null ? ` · ${hub.distanceKm} km` : ""}
                   </option>
                 ))}
               </select>
+              {hubs.length > 0 && (
+                <p className="mt-2 text-xs text-primary">
+                  ★ Recommended: <span className="font-medium">{hubs[0].name}</span>
+                  {hubs[0].distanceKm != null
+                    ? ` — ${hubs[0].distanceKm} km away (nearest)`
+                    : " (nearest)"}
+                </p>
+              )}
             </div>
 
             <div>
