@@ -1,5 +1,3 @@
-import { createServer } from "../server/index.js";
-
 // Vercel serverless entry for the whole Express API.
 // All `/api/*` requests are routed here by the rewrite in vercel.json.
 //
@@ -7,11 +5,16 @@ import { createServer } from "../server/index.js";
 // cache the resolved app across warm invocations (init once per cold start, not
 // once per request). An Express app is itself a valid (req, res) handler, so we
 // just hand the request off to it.
+//
+// The server module is imported dynamically *inside* the try/catch so that a
+// module-load failure (e.g. a missing native binding) returns a readable JSON
+// error instead of Vercel's opaque FUNCTION_INVOCATION_FAILED.
 let appPromise;
 
 export default async function handler(req, res) {
   try {
     if (!appPromise) {
+      const { createServer } = await import("../server/index.js");
       appPromise = createServer();
     }
     const app = await appPromise;
