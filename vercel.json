@@ -3,6 +3,7 @@
   "buildCommand": "pnpm run build:client",
   "outputDirectory": "dist/spa",
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
