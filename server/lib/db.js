@@ -9,13 +9,21 @@ if (!process.env.DATABASE_URL) {
   console.error('[db] DATABASE_URL is not set — check your .env');
 }
 
+// On Vercel each serverless instance gets its OWN pool, and frozen instances keep
+// their connections open until the platform recycles them. With many concurrent
+// instances that exhausts Supabase's pooler client limit (200), so cap each
+// instance at a single connection and release it quickly when idle. Locally one
+// long-lived process serves every request, so a small normal pool is fine.
+const onServerless = !!process.env.VERCEL;
+
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }, // Supabase requires SSL
-  max: 5,
+  max: onServerless ? 1 : 5,
   keepAlive: true, // keep TCP alive so idle connections drop less often
-  idleTimeoutMillis: 10_000, // close our idle clients before the Supabase pooler does
+  idleTimeoutMillis: onServerless ? 2_000 : 10_000, // release idle clients fast on serverless
   connectionTimeoutMillis: 15_000,
+  allowExitOnIdle: true, // don't pin idle connections open when the instance goes quiet
 });
 
 // Idle pooled clients can be terminated by the Supabase pooler. Handling this event
