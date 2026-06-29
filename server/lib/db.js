@@ -15,14 +15,18 @@ if (!process.env.DATABASE_URL) {
 // instance at a single connection and release it quickly when idle. Locally one
 // long-lived process serves every request, so a small normal pool is fine.
 const onServerless = !!process.env.VERCEL;
+// Tunable without a code change: set PG_POOL_MAX in the Vercel env. Keep it at 1
+// for classic serverless (1 request per instance); raise it (e.g. 3–5) if you
+// enable Fluid Compute, where one instance serves many concurrent requests.
+const poolMax = Number(process.env.PG_POOL_MAX) || (onServerless ? 1 : 5);
 
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }, // Supabase requires SSL
-  max: onServerless ? 1 : 5,
+  max: poolMax,
   keepAlive: true, // keep TCP alive so idle connections drop less often
   idleTimeoutMillis: onServerless ? 2_000 : 10_000, // release idle clients fast on serverless
-  connectionTimeoutMillis: 15_000,
+  connectionTimeoutMillis: onServerless ? 8_000 : 15_000, // fail clean before the function times out
   allowExitOnIdle: true, // don't pin idle connections open when the instance goes quiet
 });
 
