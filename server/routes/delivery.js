@@ -178,23 +178,4 @@ router.post('/:id/dropoff', verifyAuth, requireRole('delivery_worker'), (req, re
   }
 });
 
-/**
- * GET /api/delivery/earnings
- */
-router.get('/earnings', verifyAuth, requireRole('delivery_worker'), (req, res) => {
-  try {
-    const mine = deliveries.filter((d) => d.deliveryWorkerId === req.user.id);
-    const completed = mine.filter((d) => d.status === 'delivered');
-    const reliabilityScore = mine.length ? Math.round((completed.length / mine.length) * 100) : 100;
-    res.json({
-      totalDeliveries: mine.length,
-      completedDeliveries: completed.length,
-      reliabilityScore,
-      earningsINR: completed.length * 250,
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 export default router;

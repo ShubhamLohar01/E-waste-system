@@ -4,7 +4,8 @@ import { users } from '../models/User.js';
 import { verifyAuth, requireRole } from '../middleware/auth.js';
 import { maskCode } from '../utils/helpers.js';
 import { notify } from '../services/notificationService.js';
-import { validate, hubVerifySchema, confirmPrintSchema } from '../schemas.js';
+import { validate, hubVerifySchema, confirmPrintSchema, collectorPaymentSchema } from '../schemas.js';
+import { recordCollectorPayment } from '../services/payoutEngine.js';
 import { boxes } from '../models/Box.js';
 import {
   generateTransactionNo,
@@ -316,6 +317,31 @@ router.post('/flag', verifyAuth, requireRole('hub'), (req, res) => {
     item.updatedAt = now;
 
     res.json({ message: 'Discrepancy flagged', item });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/hub/collector-payment — hub records what it pays the collector
+ * who delivered this item. Recorded in rupees (1 pt = ₹1) on the ledger.
+ */
+router.post('/collector-payment', verifyAuth, requireRole('hub'), validate(collectorPaymentSchema), (req, res) => {
+  try {
+    const { inventoryId, amountRs } = req.body;
+    const item = inventory.find((i) => i._id === inventoryId);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    if (item.hubId !== req.user.id) return res.status(403).json({ error: 'This item is not at your hub.' });
+    if (!item.collectorId) return res.status(409).json({ error: 'No collector recorded for this item.' });
+
+    recordCollectorPayment(item.collectorId, inventoryId, amountRs, req.user.id);
+    notify(item.collectorId, {
+      type: 'collector_paid',
+      title: 'Payment recorded',
+      message: `A hub recorded a payment of ₹${amountRs} to you for item ${item.qrCode}.`,
+      relatedId: item._id,
+    });
+    res.json({ message: 'Collector payment recorded', amountRs });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -11,6 +11,7 @@
  */
 import { pool } from './db.js';
 import { users } from '../models/User.js';
+import { categoryPrices } from '../models/CategoryPrice.js';
 import { intents } from '../models/Intent.js';
 import { demands } from '../models/Demand.js';
 import { inventory } from '../models/Inventory.js';
@@ -21,6 +22,7 @@ import { payments } from '../models/Payment.js';
 import { rewards } from '../models/Reward.js';
 import { recyclerRequests } from '../models/RecyclerRequest.js';
 import { boxes } from '../models/Box.js';
+import { earningsLedger } from '../models/EarningsLedger.js';
 
 const iso = (v) => (v instanceof Date ? v.toISOString() : v);
 const arr = (v) => (Array.isArray(v) ? v : []);
@@ -35,6 +37,14 @@ const TABLES = [
     jsonb: ['location'],
     fromRow: (r) => ({ _id: r.id, name: r.name, email: r.email, password: r.password, phone: r.phone, role: r.role, trustLevel: r.trust_level, location: r.location, avatarUrl: r.avatar_url, isActive: r.is_active, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at) }),
     toRow: (r) => [r._id, r.name, r.email, r.password, r.phone ?? '', r.role, r.trustLevel ?? 'standard', JSON.stringify(r.location ?? {}), r.avatarUrl ?? null, r.isActive ?? true, r.createdAt, r.updatedAt],
+  },
+  {
+    name: 'category_prices',
+    array: categoryPrices,
+    columns: ['category', 'current_value', 'updated_by', 'updated_at'],
+    jsonb: [],
+    fromRow: (r) => ({ category: r.category, currentValue: r.current_value, updatedBy: r.updated_by, updatedAt: iso(r.updated_at) }),
+    toRow: (r) => [r.category, r.currentValue, nz(r.updatedBy), r.updatedAt],
   },
   {
     // Table renamed intents -> usr_req_items; in-memory array stays `intents`.
@@ -56,10 +66,10 @@ const TABLES = [
   {
     name: 'inventory',
     array: inventory,
-    columns: ['id', 'qr_code', 'intent_id', 'category', 'claimed_category', 'actual_qty', 'claimed_qty', 'unit', 'weight_kg', 'condition', 'status', 'source_user_id', 'collector_id', 'hub_id', 'delivery_worker_id', 'recycler_id', 'matched_demand_id', 'verification_photos', 'traceability', 'quality_rating', 'technician_name', 'created_at', 'updated_at'],
+    columns: ['id', 'qr_code', 'intent_id', 'category', 'claimed_category', 'actual_qty', 'claimed_qty', 'unit', 'weight_kg', 'condition', 'status', 'source_user_id', 'collector_id', 'hub_id', 'delivery_worker_id', 'recycler_id', 'matched_demand_id', 'verification_photos', 'traceability', 'quality_rating', 'technician_name', 'assessed_value', 'original_price', 'created_at', 'updated_at'],
     jsonb: ['traceability'],
-    fromRow: (r) => ({ _id: r.id, qrCode: r.qr_code, intentId: r.intent_id, category: r.category, claimedCategory: r.claimed_category, actualQty: r.actual_qty, claimedQty: r.claimed_qty, unit: r.unit, weightKg: r.weight_kg, condition: r.condition, status: r.status, sourceUserId: r.source_user_id, collectorId: r.collector_id, hubId: r.hub_id, deliveryWorkerId: r.delivery_worker_id, recyclerId: r.recycler_id, matchedDemandId: r.matched_demand_id, verificationPhotos: r.verification_photos, traceability: r.traceability, qualityRating: r.quality_rating, technicianName: r.technician_name, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at) }),
-    toRow: (r) => [r._id, nz(r.qrCode), nz(r.intentId), r.category, r.claimedCategory, r.actualQty, r.claimedQty, r.unit, r.weightKg ?? null, r.condition, r.status, nz(r.sourceUserId), nz(r.collectorId), nz(r.hubId), nz(r.deliveryWorkerId), nz(r.recyclerId), nz(r.matchedDemandId), arr(r.verificationPhotos), JSON.stringify(arr(r.traceability)), r.qualityRating ?? null, r.technicianName ?? null, r.createdAt, r.updatedAt],
+    fromRow: (r) => ({ _id: r.id, qrCode: r.qr_code, intentId: r.intent_id, category: r.category, claimedCategory: r.claimed_category, actualQty: r.actual_qty, claimedQty: r.claimed_qty, unit: r.unit, weightKg: r.weight_kg, condition: r.condition, status: r.status, sourceUserId: r.source_user_id, collectorId: r.collector_id, hubId: r.hub_id, deliveryWorkerId: r.delivery_worker_id, recyclerId: r.recycler_id, matchedDemandId: r.matched_demand_id, verificationPhotos: r.verification_photos, traceability: r.traceability, qualityRating: r.quality_rating, technicianName: r.technician_name, assessedValue: r.assessed_value, originalPrice: r.original_price, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at) }),
+    toRow: (r) => [r._id, nz(r.qrCode), nz(r.intentId), r.category, r.claimedCategory, r.actualQty, r.claimedQty, r.unit, r.weightKg ?? null, r.condition, r.status, nz(r.sourceUserId), nz(r.collectorId), nz(r.hubId), nz(r.deliveryWorkerId), nz(r.recyclerId), nz(r.matchedDemandId), arr(r.verificationPhotos), JSON.stringify(arr(r.traceability)), r.qualityRating ?? null, r.technicianName ?? null, r.assessedValue ?? null, r.originalPrice ?? null, r.createdAt, r.updatedAt],
   },
   {
     name: 'boxes',
@@ -117,6 +127,14 @@ const TABLES = [
     fromRow: (r) => ({ _id: r.id, recyclerId: r.recycler_id, category: r.category, quantity: r.quantity, unit: r.unit, note: r.note, targetDate: r.target_date, status: r.status, allocatedInventory: r.allocated_inventory, reviewedBy: r.reviewed_by, reviewNote: r.review_note, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at) }),
     toRow: (r) => [r._id, nz(r.recyclerId), r.category, r.quantity, r.unit ?? 'kg', r.note ?? null, r.targetDate ?? null, r.status ?? 'pending', JSON.stringify(arr(r.allocatedInventory)), nz(r.reviewedBy), r.reviewNote ?? null, r.createdAt, r.updatedAt],
   },
+  {
+    name: 'earnings_ledger',
+    array: earningsLedger,
+    columns: ['id', 'user_id', 'role', 'inventory_id', 'amount_rs', 'type', 'decided_by', 'note', 'created_at'],
+    jsonb: [],
+    fromRow: (r) => ({ _id: r.id, userId: r.user_id, role: r.role, inventoryId: r.inventory_id, amountRs: r.amount_rs, type: r.type, decidedBy: r.decided_by, note: r.note, createdAt: iso(r.created_at) }),
+    toRow: (r) => [r._id, nz(r.userId), r.role, nz(r.inventoryId), r.amountRs, r.type, nz(r.decidedBy), r.note ?? null, r.createdAt],
+  },
 ];
 
 let hydrated = false;
@@ -127,16 +145,34 @@ let hydrated = false;
  * Must run before flushAll(), whose INSERT lists these columns.
  */
 export async function ensureSchema() {
-  const stmts = [
-    'alter table inventory add column if not exists quality_rating integer',
-    'alter table inventory add column if not exists technician_name text',
-  ];
-  for (const sql of stmts) {
-    try {
-      await pool.query(sql);
-    } catch (e) {
-      console.error('[pgStore] ensureSchema failed:', sql, '->', e.message);
-    }
+  // Run both ALTERs in one round-trip (one pooled connection) and never let a
+  // failure here crash boot — the columns are idempotent and may already exist.
+  try {
+    await pool.query(
+      'alter table inventory add column if not exists quality_rating integer;' +
+        'alter table inventory add column if not exists technician_name text;' +
+        'alter table inventory add column if not exists assessed_value numeric;' +
+        'alter table inventory add column if not exists original_price numeric;' +
+        `create table if not exists category_prices (
+           category text primary key,
+           current_value numeric not null,
+           updated_by text references users(id),
+           updated_at timestamptz default now()
+         );` +
+        `create table if not exists earnings_ledger (
+           id text primary key,
+           user_id text references users(id),
+           role text,
+           inventory_id text references inventory(id),
+           amount_rs numeric not null,
+           type text not null,
+           decided_by text references users(id),
+           note text,
+           created_at timestamptz default now()
+         );`,
+    );
+  } catch (e) {
+    console.error('[pgStore] ensureSchema skipped:', e.message);
   }
 }
 

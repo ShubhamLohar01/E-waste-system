@@ -8,8 +8,9 @@ import { recyclerRequests } from '../models/RecyclerRequest.js';
 import { verifyAuth, requireRole } from '../middleware/auth.js';
 import { nextId, PREFIX } from '../utils/idGenerator.js';
 import { notify } from '../services/notificationService.js';
-import { RewardEngine } from '../services/rewardEngine.js';
-import { validate, markPaymentSchema, assignRecyclerSchema } from '../schemas.js';
+import { recordSale, computePool, splitPool } from '../services/payoutEngine.js';
+import { categoryPrices } from '../models/CategoryPrice.js';
+import { validate, markPaymentSchema, assignRecyclerSchema, categoryPriceSchema } from '../schemas.js';
 
 const router = Router();
 
@@ -354,32 +355,50 @@ router.get('/orders', verifyAuth, requireRole('admin'), (req, res) => {
 });
 
 /**
+ * GET /api/admin/payout-preview?inventoryId=... — what mark-payment would credit.
+ */
+router.get('/payout-preview', verifyAuth, requireRole('admin'), (req, res) => {
+  try {
+    const item = inventory.find((i) => i._id === req.query.inventoryId);
+    if (!item) return res.status(404).json({ error: 'Inventory item not found' });
+    const pool = computePool(item.category, item.qualityRating);
+    if (!pool.ok) return res.json({ ok: false, error: pool.error });
+    const parts = splitPool(pool.X);
+    return res.json({ ok: true, X: pool.X, basePrice: pool.basePrice, pct: pool.pct, parts });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/admin/mark-payment
- * body: { inventoryId, amount, method?, note? }
+ * body: { inventoryId, method?, note? }
  * Finalises an inventory item:
  *   inventory.status  → processed
- *   payment record    → collected
- *   rewards awarded   → source_user, collector, hub
+ *   payment record    → collected (amount = system-computed catalog × grade)
+ *   payouts credited  → 60/20/20 ledger entries (user / platform / hub)
  */
 router.post('/mark-payment', verifyAuth, requireRole('admin'), validate(markPaymentSchema), (req, res) => {
   try {
-    const { inventoryId, amount, method = 'cash', note = '' } = req.body;
+    const { inventoryId, method = 'cash', note = '' } = req.body;
     const item = inventory.find((i) => i._id === inventoryId);
     if (!item) return res.status(404).json({ error: 'Inventory item not found' });
     if (item.status !== 'delivered') {
-      return res
-        .status(409)
-        .json({ error: `Item must be in status 'delivered' to collect payment. Current: ${item.status}` });
+      return res.status(409).json({ error: `Item must be in status 'delivered' to collect payment. Current: ${item.status}` });
     }
 
-    const now = new Date().toISOString();
+    // Value the item and write the 60/20/20 ledger entries (also freezes assessedValue).
+    const sale = recordSale(item, req.user.id);
+    if (!sale.ok) return res.status(409).json({ error: sale.error });
+    const amount = sale.X;
 
+    const now = new Date().toISOString();
     const payment = {
       _id: nextId(PREFIX.PAYMENT),
       inventoryId,
       recyclerId: item.recyclerId,
       collectedBy: req.user.id,
-      amount: Number(amount),
+      amount,
       method,
       note,
       status: 'collected',
@@ -393,22 +412,16 @@ router.post('/mark-payment', verifyAuth, requireRole('admin'), validate(markPaym
       actor: req.user.id,
       actorName: users.find((u) => u._id === req.user.id)?.name,
       action: 'payment_collected',
-      note: `₹${payment.amount} via ${method}`,
+      note: `₹${amount} via ${method}`,
       timestamp: now,
     });
     item.updatedAt = now;
 
-    // Award points to the three participants
-    const awarded = RewardEngine.awardTripleOnProcessed(item);
-
-    // Notify each
-    const recycler = users.find((u) => u._id === item.recyclerId);
-    const rewardMsg = `Your contribution to item #${item.qrCode} (${item.category}) is complete. Reward points added.`;
-    [item.sourceUserId, item.collectorId, item.hubId].filter(Boolean).forEach((uid) =>
+    [item.sourceUserId, item.hubId].filter(Boolean).forEach((uid) =>
       notify(uid, {
         type: 'item_processed',
-        title: 'Reward points earned',
-        message: rewardMsg,
+        title: 'Payout credited',
+        message: `Your earnings for item ${item.qrCode} (${item.category}) have been credited.`,
         relatedId: item._id,
       })
     );
@@ -416,11 +429,11 @@ router.post('/mark-payment', verifyAuth, requireRole('admin'), validate(markPaym
       notify(item.recyclerId, {
         type: 'payment_recorded',
         title: 'Payment recorded',
-        message: `Admin recorded your payment of ₹${payment.amount} for item ${item.qrCode}.`,
+        message: `Admin recorded your payment of ₹${amount} for item ${item.qrCode}.`,
       });
     }
 
-    res.json({ message: 'Payment recorded and rewards distributed', payment, item, awarded });
+    res.json({ message: 'Payment recorded and payouts credited', payment, item, payout: sale.parts });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -565,6 +578,41 @@ router.get('/payments', verifyAuth, requireRole('admin'), (req, res) => {
       };
     });
     res.json({ payments: list, total: list.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/category-prices — current market value per category.
+ */
+router.get('/category-prices', verifyAuth, requireRole('admin'), (req, res) => {
+  try {
+    const list = [...categoryPrices].sort((a, b) => a.category.localeCompare(b.category));
+    const known = [...new Set(inventory.map((i) => i.category).filter(Boolean))].sort();
+    res.json({ prices: list, total: list.length, categories: known });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/category-prices — upsert one category's current value.
+ */
+router.put('/category-prices', verifyAuth, requireRole('admin'), validate(categoryPriceSchema), (req, res) => {
+  try {
+    const { category, currentValue } = req.body;
+    const now = new Date().toISOString();
+    let row = categoryPrices.find((c) => c.category === category);
+    if (row) {
+      row.currentValue = currentValue;
+      row.updatedBy = req.user.id;
+      row.updatedAt = now;
+    } else {
+      row = { category, currentValue, updatedBy: req.user.id, updatedAt: now };
+      categoryPrices.push(row);
+    }
+    res.json({ message: 'Price saved', price: row });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

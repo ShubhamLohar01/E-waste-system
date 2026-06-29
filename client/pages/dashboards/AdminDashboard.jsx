@@ -44,16 +44,21 @@ export default function AdminDashboard() {
   const [approveTarget, setApproveTarget] = useState(null);
   const [allocIds, setAllocIds] = useState(new Set());
 
+  // category price catalog
+  const [catPrices, setCatPrices] = useState([]);
+  const [knownCategories, setKnownCategories] = useState([]); // distinct categories present in inventory
+  const [priceEdits, setPriceEdits] = useState({}); // category -> string value
+
   // mark payment
   const [payOpen, setPayOpen] = useState(false);
   const [payItem, setPayItem] = useState(null);
-  const [payAmount, setPayAmount] = useState(0);
   const [payMethod, setPayMethod] = useState('bank_transfer');
   const [payNote, setPayNote] = useState('');
+  const [payPreview, setPayPreview] = useState(null); // null = loading, else { ok, ... }
 
   const refresh = useCallback(async () => {
     try {
-      const [m, v, o, p, u, d, a, ints, rr] = await Promise.all([
+      const [m, v, o, p, u, d, a, ints, rr, cp] = await Promise.all([
         api.get('/api/admin/dashboard'),
         api.get('/api/admin/verified-items'),
         api.get('/api/admin/orders'),
@@ -63,6 +68,7 @@ export default function AdminDashboard() {
         api.get('/api/admin/audit'),
         api.get('/api/admin/intents'),
         api.get('/api/admin/recycler-requests'),
+        api.get('/api/admin/category-prices'),
       ]);
       setMetrics(m?.metrics || null);
       setVerified(v?.items || []);
@@ -76,6 +82,8 @@ export default function AdminDashboard() {
       setCollectorsList(ints?.collectors || []);
       setRecyclerRequests(rr?.requests || []);
       setVerifiedStock(rr?.verifiedStock || []);
+      setCatPrices(cp?.prices || []);
+      setKnownCategories(cp?.categories || []);
       setLoadError(null);
     } catch (err) {
       console.error(err);
@@ -169,31 +177,54 @@ export default function AdminDashboard() {
     }
   };
 
-  const openPayment = (item) => {
-    const suggested =
-      item.recyclerRatePerKg && item.weightKg
-        ? Math.round(item.recyclerRatePerKg * item.weightKg)
-        : 0;
+  const fetchCategoryPrices = useCallback(async () => {
+    try {
+      const res = await api.get('/api/admin/category-prices');
+      setCatPrices(res?.prices || []);
+      setKnownCategories(res?.categories || []);
+    } catch (err) { console.error(err); }
+  }, []);
+
+  const saveCategoryPrice = async (category) => {
+    const raw = priceEdits[category];
+    const currentValue = Number(raw);
+    if (!Number.isFinite(currentValue) || currentValue < 0) return alert('Enter a valid amount (₹).');
+    try {
+      await api.put('/api/admin/category-prices', { category, currentValue });
+      await fetchCategoryPrices();
+    } catch (err) { alert(err?.message || 'Could not save price.'); }
+  };
+
+  const openPayment = async (item) => {
     setPayItem(item);
-    setPayAmount(suggested);
     setPayMethod('bank_transfer');
     setPayNote('');
+    setPayPreview(null);
     setPayOpen(true);
+    try {
+      const res = await api.get(`/api/admin/payout-preview?inventoryId=${encodeURIComponent(item._id)}`);
+      setPayPreview(res);
+    } catch (err) {
+      setPayPreview({ ok: false, error: err?.message || 'Could not compute payout.' });
+    }
   };
 
   const markPayment = async () => {
     if (!payItem) return;
     setBusy('pay');
     try {
-      await api.post('/api/admin/mark-payment', {
+      const res = await api.post('/api/admin/mark-payment', {
         inventoryId: payItem._id,
-        amount: payAmount,
         method: payMethod,
         note: payNote,
       });
       setPayOpen(false);
       setPayItem(null);
+      setPayPreview(null);
       await refresh();
+      if (res?.payment && res?.payout) {
+        alert(`Recorded ₹${res.payment.amount} — seller ₹${res.payout.user}, hub ₹${res.payout.hub}`);
+      }
     } catch (err) {
       alert(err.message);
     } finally {
@@ -286,6 +317,7 @@ export default function AdminDashboard() {
           {[
             ['verified', 'Verified · Assign recycler'],
             ['recycler_requests', `Recycler requests (${recyclerRequests.filter((r) => r.status === 'pending').length})`],
+            ['category_prices', 'Price catalog'],
             ['pending_payment', `Payment due (${delivered.length})`],
             ['assign_collector', `Unassigned intents (${unassignedIntents.length})`],
             ['disputes', `Disputes (${disputes.filter(d => d.status === 'open').length} open)`],
@@ -409,10 +441,83 @@ export default function AdminDashboard() {
           </section>
         )}
 
+        {tab === 'category_prices' && (
+          <section className="rounded-lg border border-border bg-card p-5">
+            <h2 className="text-lg font-bold mb-1">Category price catalog</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Current market value (₹) per category. Payouts = this value × the technician's quality grade.
+            </p>
+            <div className="space-y-2">
+              {catPrices.map((p) => (
+                <div key={p.category} className="flex items-center gap-3">
+                  <span className="flex-1 text-sm font-medium">{p.category}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    defaultValue={p.currentValue}
+                    onChange={(e) => setPriceEdits((s) => ({ ...s, [p.category]: e.target.value }))}
+                    className="w-40 px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                  />
+                  <Button size="sm" variant="outline" onClick={() => saveCategoryPrice(p.category)}>Save</Button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 border-t border-border pt-4">
+              {(() => {
+                const priced = new Set(catPrices.map((p) => p.category));
+                const unpriced = knownCategories.filter((c) => !priced.has(c));
+                if (unpriced.length === 0) {
+                  return (
+                    <p className="text-sm text-muted-foreground">
+                      All inventory categories are priced.
+                    </p>
+                  );
+                }
+                return (
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={priceEdits.__new_cat || ''}
+                      onChange={(e) => setPriceEdits((s) => ({ ...s, __new_cat: e.target.value }))}
+                      className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                    >
+                      <option value="" disabled>— select a category —</option>
+                      {unpriced.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number" min="0" placeholder="₹ value"
+                      value={priceEdits.__new_val || ''}
+                      onChange={(e) => setPriceEdits((s) => ({ ...s, __new_val: e.target.value }))}
+                      className="w-40 px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        const category = (priceEdits.__new_cat || '').trim();
+                        const currentValue = Number(priceEdits.__new_val);
+                        if (!category) return alert('Select a category.');
+                        if (!Number.isFinite(currentValue) || currentValue < 0) return alert('Enter a valid ₹ value.');
+                        try {
+                          await api.put('/api/admin/category-prices', { category, currentValue });
+                          setPriceEdits((s) => ({ ...s, __new_cat: '', __new_val: '' }));
+                          await fetchCategoryPrices();
+                        } catch (err) { alert(err?.message || 'Could not add.'); }
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                );
+              })()}
+            </div>
+          </section>
+        )}
+
         {tab === 'pending_payment' && (
           <section className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              These orders have been delivered to the recycler. Collect the payment offline (bank transfer / cash / UPI), then record it here to finalise and release reward points.
+              These orders have been delivered to the recycler. Collect the payment offline (bank transfer / cash / UPI), then record it here to finalise and credit the payout.
             </p>
             {delivered.length === 0 ? (
               <div className="p-10 rounded-lg border border-dashed text-center text-muted-foreground">
@@ -711,35 +816,38 @@ export default function AdminDashboard() {
 
       {/* Assign recycler dialog */}
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Assign recycler</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <p className="text-sm text-muted-foreground">{selectedIds.size} item(s) selected.</p>
-            <div className="space-y-2">
+          <div className="flex flex-col min-h-0 flex-1 gap-3">
+            <p className="text-sm text-muted-foreground shrink-0">{selectedIds.size} item(s) selected.</p>
+            <div className="space-y-2 overflow-y-auto min-h-0 flex-1 pr-1">
               {recyclers.map((r) => (
                 <label
                   key={r._id}
-                  className={`flex items-start justify-between p-3 rounded-lg border cursor-pointer ${
+                  className={`flex items-start justify-between gap-3 p-2.5 rounded-lg border cursor-pointer ${
                     recyclerId === r._id ? 'border-primary bg-primary/5' : 'border-border'
                   }`}
                 >
-                  <div>
-                    <p className="font-medium">{r.companyName || r.name}</p>
-                    <p className="text-xs text-muted-foreground">{r.address}</p>
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate" title={r.companyName || r.name}>
+                      {r.companyName || r.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate" title={r.address}>{r.address}</p>
                     {r.ratePerKg > 0 && <p className="text-xs text-muted-foreground">Rate: ₹{r.ratePerKg}/kg</p>}
                   </div>
                   <input
                     type="radio"
                     name="recycler"
+                    className="mt-1 shrink-0"
                     checked={recyclerId === r._id}
                     onChange={() => setRecyclerId(r._id)}
                   />
                 </label>
               ))}
             </div>
-            <Button onClick={assign} disabled={busy === 'assign' || !recyclerId} className="w-full gap-2">
+            <Button onClick={assign} disabled={busy === 'assign' || !recyclerId} className="w-full gap-2 shrink-0">
               {busy === 'assign' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Factory className="w-4 h-4" />}
               Confirm assignment
             </Button>
@@ -809,7 +917,7 @@ export default function AdminDashboard() {
       </Dialog>
 
       {/* Record payment dialog */}
-      <Dialog open={payOpen} onOpenChange={setPayOpen}>
+      <Dialog open={payOpen} onOpenChange={(v) => { setPayOpen(v); if (!v) { setPayItem(null); setPayPreview(null); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Record payment from recycler</DialogTitle>
@@ -823,30 +931,41 @@ export default function AdminDashboard() {
                   {payItem.weightKg ? ` · ${payItem.weightKg} kg` : ''} · To: {payItem.recyclerName}
                 </p>
               </div>
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Amount (₹)</label>
-                  <input
-                    type="number"
-                    value={payAmount}
-                    onChange={(e) => setPayAmount(parseInt(e.target.value) || 0)}
-                    min="0"
-                    className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm"
-                  />
+              <p className="text-sm text-muted-foreground">
+                The payout is computed automatically from the category catalog price × the item's quality grade,
+                then split 60% seller / 20% platform / 20% hub.
+              </p>
+              {payPreview == null ? (
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Computing payout…
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Method</label>
-                  <select
-                    value={payMethod}
-                    onChange={(e) => setPayMethod(e.target.value)}
-                    className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm"
-                  >
-                    <option value="bank_transfer">Bank transfer</option>
-                    <option value="upi">UPI</option>
-                    <option value="cash">Cash</option>
-                    <option value="cheque">Cheque</option>
-                  </select>
+              ) : payPreview.ok ? (
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm">
+                  <p className="font-semibold">
+                    Payout: ₹{payPreview.X} → seller ₹{payPreview.parts.user}, platform ₹{payPreview.parts.platform}, hub ₹{payPreview.parts.hub}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Base ₹{payPreview.basePrice} × {Math.round(payPreview.pct * 100)}% grade
+                  </p>
                 </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  <span>{payPreview.error}</span>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium mb-1">Method</label>
+                <select
+                  value={payMethod}
+                  onChange={(e) => setPayMethod(e.target.value)}
+                  className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm"
+                >
+                  <option value="bank_transfer">Bank transfer</option>
+                  <option value="upi">UPI</option>
+                  <option value="cash">Cash</option>
+                  <option value="cheque">Cheque</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Note (optional)</label>
@@ -858,12 +977,12 @@ export default function AdminDashboard() {
                   className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm"
                 />
               </div>
-              <Button onClick={markPayment} disabled={busy === 'pay' || payAmount <= 0} className="w-full gap-2">
+              <Button onClick={markPayment} disabled={busy === 'pay' || !payPreview?.ok} className="w-full gap-2">
                 {busy === 'pay' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 Record payment &amp; finalise
               </Button>
               <p className="text-xs text-muted-foreground">
-                This marks the order as processed and awards reward points to the small user, collector, and hub.
+                This marks the order as processed and credits the computed payout to the small user, platform, and hub.
               </p>
             </div>
           )}

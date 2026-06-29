@@ -10,7 +10,6 @@ import {
 import {
   Plus,
   Trash2,
-  Award,
   TrendingUp,
   Package,
   CheckCircle2,
@@ -59,7 +58,7 @@ export default function SmallUserDashboard() {
   const { user, token, logout } = useAuth();
   const navigate = useNavigate();
   const [intents, setIntents] = useState([]);
-  const [rewardData, setRewardData] = useState(null);
+  const [earnings, setEarnings] = useState({ balanceRs: 0, entries: [] });
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -107,22 +106,19 @@ export default function SmallUserDashboard() {
     }
   }, [apiFetch]);
 
-  const fetchRewards = useCallback(async () => {
+  const fetchEarnings = useCallback(async () => {
     try {
-      const res = await apiFetch("/api/intent/rewards");
-      if (res.ok) {
-        const data = await res.json();
-        setRewardData(data);
-      }
+      const res = await apiFetch("/api/earnings/mine");
+      if (res.ok) setEarnings(await res.json());
     } catch (err) {
-      console.error("Failed to fetch rewards:", err);
+      console.error("Failed to fetch earnings:", err);
     }
   }, [apiFetch]);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      await Promise.all([fetchIntents(), fetchRewards()]);
+      await Promise.all([fetchIntents(), fetchEarnings()]);
       setLoading(false);
     };
     load();
@@ -132,7 +128,7 @@ export default function SmallUserDashboard() {
       fetchIntents();
     }, 30_000);
     return () => clearInterval(interval);
-  }, [fetchIntents, fetchRewards]);
+  }, [fetchIntents, fetchEarnings]);
 
   const handleImageUpload = (itemIdx, e) => {
     const files = e.target.files;
@@ -318,10 +314,6 @@ export default function SmallUserDashboard() {
     cancelled: { color: "bg-red-50 text-red-700 border-red-200", icon: Trash2, label: "Cancelled" },
   };
 
-  const points = rewardData?.totalPoints ?? 0;
-  const badges = rewardData?.badges ?? [];
-  const milestones = rewardData?.milestones ?? [];
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -354,7 +346,7 @@ export default function SmallUserDashboard() {
               <Link to="/reward">
                 <Button variant="outline" size="sm" className="gap-2 border-primary/40 text-primary hover:bg-primary/5">
                   <Coins className="w-4 h-4" />
-                  <span className="hidden sm:inline">{Math.round(points)} Coins</span>
+                  <span className="hidden sm:inline">₹{Math.round(earnings.balanceRs)}</span>
                   <span className="sm:hidden">Wallet</span>
                 </Button>
               </Link>
@@ -382,8 +374,8 @@ export default function SmallUserDashboard() {
           <div className="p-5 rounded-lg border border-border bg-card">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Total Points</p>
-                <p className="text-2xl font-bold text-foreground">{Math.round(points)}</p>
+                <p className="text-sm text-muted-foreground mb-1">Total earnings</p>
+                <p className="text-2xl font-bold text-foreground">₹{Math.round(earnings.balanceRs)}</p>
               </div>
               <div className="p-3 rounded-lg bg-accent/10">
                 <TrendingUp className="w-5 h-5 text-accent" />
@@ -417,11 +409,11 @@ export default function SmallUserDashboard() {
           <div className="p-5 rounded-lg border border-border bg-card">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Badges</p>
-                <p className="text-2xl font-bold text-foreground">{badges.length}</p>
+                <p className="text-sm text-muted-foreground mb-1">Payouts</p>
+                <p className="text-2xl font-bold text-foreground">{earnings.entries.length}</p>
               </div>
               <div className="p-3 rounded-lg bg-yellow-100">
-                <Award className="w-5 h-5 text-yellow-600" />
+                <Coins className="w-5 h-5 text-yellow-600" />
               </div>
             </div>
           </div>
@@ -568,75 +560,33 @@ export default function SmallUserDashboard() {
             )}
           </div>
 
-          {/* Rewards Sidebar */}
+          {/* Earnings Sidebar */}
           <aside>
-            {/* Wallet shortcut */}
             <Link to="/reward" className="block mb-6">
               <div className="p-5 rounded-xl bg-gradient-to-br from-primary to-accent text-primary-foreground text-center hover:opacity-90 transition-opacity">
                 <Coins className="w-8 h-8 mx-auto mb-2 opacity-90" />
-                <p className="text-3xl font-bold">{Math.round(points)}</p>
-                <p className="text-sm opacity-80">coins earned</p>
-                <p className="mt-2 text-xs bg-white/20 rounded-full px-3 py-1 inline-block">View Full Wallet →</p>
+                <p className="text-3xl font-bold">₹{Math.round(earnings.balanceRs)}</p>
+                <p className="text-sm opacity-80">total earned</p>
+                <p className="mt-2 text-xs bg-white/20 rounded-full px-3 py-1 inline-block">View wallet →</p>
               </div>
             </Link>
-
             <div className="mb-8">
-              <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                <Award className="w-5 h-5 text-accent" />
-                Your Badges
-              </h3>
-              {badges.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No badges yet. Keep contributing!</p>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Recent payouts</h3>
+              {earnings.entries.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No payouts yet. You're paid when a recycler buys your item.</p>
               ) : (
                 <div className="space-y-3">
-                  {badges.map((badge, idx) => (
-                    <div key={idx} className="p-4 rounded-lg border border-accent/20 bg-accent/5 text-center">
-                      <p className="font-semibold text-foreground text-sm">{badge.name}</p>
+                  {earnings.entries.slice(0, 8).map((e) => (
+                    <div key={e._id} className="p-3 rounded-lg border border-border bg-card flex items-center justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{e.category || 'Item'}</p>
+                        <p className="text-xs text-muted-foreground">{new Date(e.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <span className="text-sm font-bold text-green-600">+₹{Math.round(e.amountRs)}</span>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
-
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-foreground mb-4">Milestone Progress</h3>
-              <div className="space-y-4">
-                {milestones.map((milestone, idx) => (
-                  <div key={idx} className="p-4 rounded-lg border border-border bg-card">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm font-semibold text-foreground">{milestone.threshold} Points</p>
-                      {milestone.reached && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-2 capitalize">
-                      Reward: {milestone.rewardType.replace("_", " ")}
-                    </p>
-                    <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full bg-accent rounded-full transition-all"
-                        style={{ width: milestone.reached ? "100%" : `${Math.min((points / milestone.threshold) * 100, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="p-4 rounded-lg border border-primary/20 bg-primary/5">
-              <h4 className="font-semibold text-foreground mb-3 text-sm">How to earn more points</h4>
-              <ul className="space-y-2 text-xs text-muted-foreground">
-                <li className="flex gap-2">
-                  <span className="text-primary font-bold">1.</span>
-                  <span>Submit items with clear photos</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-primary font-bold">2.</span>
-                  <span>Ensure collectors can verify easily</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-primary font-bold">3.</span>
-                  <span>Complete items through the full lifecycle</span>
-                </li>
-              </ul>
             </div>
           </aside>
         </div>

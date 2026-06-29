@@ -6,7 +6,7 @@ import NotificationsBell from '@/components/NotificationsBell';
 import GoogleMapDirections from '@/components/GoogleMapDirections';
 import {
   Package, LogOut, Truck, MapPin, Phone, Building2, CheckCircle2,
-  Loader2, Camera, RotateCcw, Clock, IndianRupee, TrendingUp,
+  Loader2, Camera, RotateCcw, Clock,
   Navigation, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -16,7 +16,6 @@ export default function DeliveryWorkerDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
-  const [earnings, setEarnings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [photos, setPhotos] = useState({});
@@ -32,12 +31,8 @@ export default function DeliveryWorkerDashboard() {
 
   const refresh = useCallback(async () => {
     try {
-      const [t, e] = await Promise.all([
-        api.get('/api/delivery/tasks'),
-        api.get('/api/delivery/earnings'),
-      ]);
+      const t = await api.get('/api/delivery/tasks');
       setTasks(t?.tasks || []);
-      setEarnings(e || null);
     } catch (err) {
       console.error(err);
     }
@@ -120,19 +115,9 @@ export default function DeliveryWorkerDashboard() {
           </p>
         </section>
 
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <section className="grid grid-cols-2 gap-4">
           <Stat label="Open tasks" value={open.length} />
           <Stat label="Completed" value={done.length} />
-          <Stat
-            label="Reliability"
-            value={earnings ? `${earnings.reliabilityScore}%` : '—'}
-            icon={<TrendingUp className="w-5 h-5 text-green-600" />}
-          />
-          <Stat
-            label="Earnings"
-            value={earnings ? `₹${earnings.earningsINR}` : '₹0'}
-            icon={<IndianRupee className="w-5 h-5 text-primary" />}
-          />
         </section>
 
         <section>

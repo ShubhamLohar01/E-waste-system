@@ -34,6 +34,7 @@ export default function HubDashboard() {
   const [activeTab, setActiveTab] = useState("incoming");
   const [incomingItems, setIncomingItems] = useState([]);
   const [verifiedItems, setVerifiedItems] = useState([]);
+  const [earnings, setEarnings] = useState({ balanceRs: 0, entries: [] });
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
 
@@ -79,6 +80,11 @@ export default function HubDashboard() {
         const data = await invRes.json();
         setVerifiedItems(data.verifiedItems || []);
       }
+
+      try {
+        const res = await apiFetch("/api/earnings/mine");
+        if (res.ok) setEarnings(await res.json());
+      } catch { /* ignore */ }
     } catch (err) {
       console.error("Failed to fetch data:", err);
     }
@@ -218,6 +224,22 @@ export default function HubDashboard() {
     }
   };
 
+  const recordCollectorPayment = async (inventoryId) => {
+    const raw = window.prompt("Amount to pay the collector for this item (₹):");
+    if (raw == null) return;
+    const amountRs = Number(raw);
+    if (!Number.isFinite(amountRs) || amountRs <= 0) return alert("Enter a positive amount.");
+    try {
+      const res = await apiFetch("/api/hub/collector-payment", {
+        method: "POST",
+        body: JSON.stringify({ inventoryId, amountRs }),
+      });
+      if (!res.ok) { const d = await res.json(); return alert(d.error || "Failed."); }
+      alert("Collector payment recorded.");
+      await fetchData();
+    } catch { alert("Failed to record payment."); }
+  };
+
   const handleLogout = async () => {
     await logout();
     navigate("/login");
@@ -256,6 +278,9 @@ export default function HubDashboard() {
               </Link>
             </div>
             <div className="flex items-center gap-3">
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-800 text-sm font-medium" title="Your earnings">
+                ₹{Math.round(earnings.balanceRs)}
+              </span>
               <NotificationsBell />
               <Link to="/profile">
                 <Button variant="outline" size="sm" className="hidden sm:inline-flex">Profile</Button>
@@ -568,6 +593,13 @@ export default function HubDashboard() {
                                     )}
                                   </div>
                                 </div>
+                                {item.collectorId && (
+                                  <div className="mt-4 pt-4 border-t border-border">
+                                    <Button size="sm" variant="outline" onClick={() => recordCollectorPayment(item._id)}>
+                                      Record collector payment
+                                    </Button>
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           )}

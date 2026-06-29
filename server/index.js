@@ -12,7 +12,7 @@ import bulkRoutes from "./routes/bulk.js";
 import adminRoutes from "./routes/admin.js";
 import recyclerRoutes from "./routes/recycler.js";
 import notificationRoutes from "./routes/notifications.js";
-import rewardRoutes from "./routes/rewards.js";
+import earningsRoutes from "./routes/earnings.js";
 import disputesRoutes from "./routes/disputes.js";
 import { ensureSchema, hydrateAll } from "./lib/pgStore.js";
 import { persistAll } from "./middleware/persistAll.js";
@@ -49,7 +49,7 @@ export async function createServer() {
   app.use("/api/admin", adminRoutes);
   app.use("/api/recycler", recyclerRoutes);
   app.use("/api/notifications", notificationRoutes);
-  app.use("/api/rewards", rewardRoutes);
+  app.use("/api/earnings", earningsRoutes);
   app.use("/api/disputes", disputesRoutes);
 
   return app;

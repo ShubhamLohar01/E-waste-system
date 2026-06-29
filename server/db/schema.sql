@@ -200,3 +200,29 @@ create table if not exists boxes (
 create index if not exists idx_boxes_inventory   on boxes(inventory_id);
 create index if not exists idx_boxes_recycler     on boxes(recycler_id);
 create index if not exists idx_boxes_transaction  on boxes(transaction_no);
+
+-- 12. category_prices (admin-maintained current market value per category) -----
+create table if not exists category_prices (
+  category      text primary key,
+  current_value numeric not null,
+  updated_by    text references users(id),
+  updated_at    timestamptz default now()
+);
+
+-- 13. earnings_ledger (money payouts; replaces gamification points) -----------
+create table if not exists earnings_ledger (
+  id           text primary key,
+  user_id      text references users(id),
+  role         text,
+  inventory_id text references inventory(id),
+  amount_rs    numeric not null,
+  type         text not null,            -- user_share | hub_share | platform_share | collector_payment
+  decided_by   text references users(id),
+  note         text,
+  created_at   timestamptz default now()
+);
+create index if not exists idx_earnings_user      on earnings_ledger(user_id);
+create index if not exists idx_earnings_inventory  on earnings_ledger(inventory_id);
+
+alter table inventory add column if not exists assessed_value numeric;
+alter table inventory add column if not exists original_price numeric;

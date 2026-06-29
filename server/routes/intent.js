@@ -4,7 +4,6 @@ import { generateQRCode, validateImageDataUrl, validateInvoiceDataUrl } from '..
 import { nextId, PREFIX } from '../utils/idGenerator.js';
 import { verifyAuth, requireRole } from '../middleware/auth.js';
 import { inventory } from '../models/Inventory.js';
-import { rewards } from '../models/Reward.js';
 import { users } from '../models/User.js';
 import { haversineKm, sortByDistanceFrom } from '../utils/distance.js';
 import { notify, notifyMany } from '../services/notificationService.js';
@@ -224,50 +223,6 @@ router.get('/', verifyAuth, (req, res) => {
       return { ...it, collectorName: col?.name || null, collectorPhone: col?.phone || null };
     });
     res.json({ intents: enriched, total: enriched.length });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/intent/rewards  — small user wallet summary
- */
-router.get('/rewards', verifyAuth, (req, res) => {
-  try {
-    if (req.user.role !== 'small_user') {
-      return res.status(403).json({ error: 'Only small users can access rewards' });
-    }
-    const reward = rewards.find((r) => r.userId === req.user.id);
-    if (!reward) return res.status(404).json({ error: 'Reward record not found' });
-
-    const enrichedHistory = reward.history
-      .map((h) => {
-        const item = h.inventoryId ? inventory.find((i) => i._id === h.inventoryId) : null;
-        return {
-          ...h,
-          category: item?.category || null,
-          quantity: item?.actualQty || null,
-          unit: item?.unit || null,
-        };
-      })
-      .reverse();
-
-    const tier =
-      reward.totalPoints >= 5000 ? 'Platinum' : reward.totalPoints >= 1000 ? 'Gold' : 'Silver';
-    const nextMilestone = reward.milestones.find((m) => !m.reached);
-
-    res.json({
-      ...reward,
-      enrichedHistory,
-      tier,
-      nextMilestone: nextMilestone
-        ? {
-            threshold: nextMilestone.threshold,
-            pointsNeeded: Math.max(0, nextMilestone.threshold - reward.totalPoints),
-            rewardType: nextMilestone.rewardType,
-          }
-        : null,
-    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

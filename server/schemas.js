@@ -75,7 +75,6 @@ export const acknowledgeBoxSchema = z.object({
 
 export const markPaymentSchema = z.object({
   inventoryId: z.string().min(1),
-  amount: z.number().positive().max(10_000_000),
   method: z.enum(['bank_transfer', 'upi', 'cash', 'cheque']).optional(),
   note: z.string().max(500).optional(),
 });
@@ -116,6 +115,16 @@ export const profileUpdateSchema = z.object({
   name: z.string().min(2).max(100).optional(),
   phone: z.string().max(30).optional(),
   location: locationSchema.optional(),
+});
+
+export const categoryPriceSchema = z.object({
+  category: z.string().min(1).max(100),
+  currentValue: z.number().nonnegative().max(100_000_000),
+});
+
+export const collectorPaymentSchema = z.object({
+  inventoryId: z.string().min(1),
+  amountRs: z.number().positive().max(10_000_000),
 });
 
 /**

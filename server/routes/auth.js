@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { users } from '../models/User.js';
 import { hashPassword, comparePassword, generateId } from '../utils/helpers.js';
-import { nextId, PREFIX } from '../utils/idGenerator.js';
+import { nextId, nextUserId, PREFIX } from '../utils/idGenerator.js';
 import {
   generateToken,
   generateVerificationToken,
@@ -118,7 +118,7 @@ router.post('/register-with-email', registerLimiter, validate(registerWithEmailS
     }
     const randomPassword = await hashPassword(generateId() + Date.now());
     const user = {
-      _id: nextId(PREFIX.USER),
+      _id: nextUserId(role),
       name: name.trim(),
       email,
       password: randomPassword,
@@ -195,7 +195,7 @@ router.post('/register', registerLimiter, validate(registerSchema), async (req, 
 
     // Create user
     const user = {
-      _id: nextId(PREFIX.USER),
+      _id: nextUserId(role),
       name,
       email,
       password: hashedPassword,
@@ -328,7 +328,7 @@ router.post('/google', async (req, res) => {
       }
     } else {
       user = {
-        _id: nextId(PREFIX.USER),
+        _id: nextUserId('small_user'),
         name: payload.name || email.split('@')[0],
         email,
         password: '', // no password for Google users

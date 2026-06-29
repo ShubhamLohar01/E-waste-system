@@ -93,7 +93,7 @@ rewriting all the page logic**.
 ### Database tables
 - **users** — everyone's account (name, email, hashed password, role, location, trust level)
 - **intents** — a small user's request to dispose e-waste (the list of items)
-- **inventory** — each physical item/lot, tracked through the whole journey (the heart of the system)
+- **inventory** — each physical item/lot, tracked through the whole journey (the heart of the system); also holds the recycler's `quality_rating` (1–10) and `technician_name` once received
 - **demands** — older recycler demand records (legacy)
 - **recycler_requests** — a recycler asks the admin for a category + quantity
 - **deliveries** — transport jobs from hub to recycler
@@ -148,7 +148,9 @@ Small User → Collector → Hub → (Admin) → Delivery Worker → Recycler �
 - **Item status: `submitted`**
 
 ### Step 2 — Collector accepts and collects
-- A collector sees pending pickups **sorted by distance** from them.
+- A collector sees pending pickups **sorted by distance** from them. Once the
+  collector has set their live location, requests **farther than 15 km are hidden**,
+  so they only see nearby work.
 - They **accept** a request (it locks to them). The small user is notified.
   **Intent status: `assigned`**
 - They visit the address, collect the items, take a photo, and mark **collected**. A
@@ -199,15 +201,21 @@ There are **two ways** stock reaches a recycler, and the admin controls both:
 
 ### Step 7 — Recycler arranges delivery
 - The recycler sees the items assigned to them (the hub shown only as a code like
-  `HUB-9F3A2C`).
+  `HUB-9F3A2C`) in an **"Assigned to you (awaiting pickup)"** list.
 - They pick a **delivery worker** to carry the items from the hub to their facility.
-  A **delivery** job is created and the driver is notified. **Item status: `in_transit`**.
+  A **delivery** job is created and the driver is notified.
+- Those items then leave the selectable list and move into a read-only
+  **"Dispatched — awaiting pickup"** section. (The item stays `matched` with a driver
+  attached; it only becomes `in_transit` when the driver actually picks it up.)
 
 ### Step 8 — Delivery and receipt
-- The delivery worker picks up the boxes from the hub (QR scan) and drops them at the
-  recycler (QR scan + proof photo).
+- The delivery worker picks up the boxes from the hub (QR scan) — **item status:
+  `in_transit`** — and drops them at the recycler (QR scan + proof photo).
 - The recycler **acknowledges** each box by scanning its QR. When all boxes are
   acknowledged, the item is marked received. **Item status: `delivered`**.
+- After receipt, the recycler records a **quality assessment** for the item: the
+  **technician's name** and a **quality rating from 1 to 10**. This is saved on the item
+  (and in its history) for traceability.
 
 ### Step 9 — Payment and rewards
 - The admin records the **payment** the recycler paid (amount, method, note).
@@ -227,7 +235,8 @@ at_hub     → dropped at a hub, waiting for hub to confirm
 received   → hub confirmed it arrived
 pending_print → hub staged QR boxes, ready to print
 verified   → printed & quality-checked, ready to assign
-matched    → assigned/approved to a recycler
+matched    → assigned/approved to a recycler (a delivery worker may also be assigned =
+             "dispatched, awaiting pickup")
 in_transit → a delivery worker is carrying it
 delivered  → recycler received & acknowledged it
 processed  → payment recorded, rewards given (final)
@@ -241,8 +250,11 @@ when) onto the item, so the **admin can audit the full history** of any item.
 ## 8. Supporting features
 
 ### Rewards (gamification)
-Users earn **points**, keep **streaks**, and unlock **badges/milestones** (Bronze,
-Silver, Gold, Platinum) for contributing. This encourages people to keep recycling.
+The reward engine awards **points** to the small user, collector, and hub when an item
+is processed, and tracks **streaks** and **badges/milestones** (Bronze, Silver, Gold,
+Platinum). The **points wallet is shown only on the Small User dashboard**; the collector
+and hub still earn points behind the scenes but no longer show a points counter in their
+dashboard.
 
 ### Notifications
 Every important event (pickup accepted, items received, request approved, payment
@@ -320,6 +332,9 @@ ewaste-system/
    `AWS_S3_BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION`,
    and the Google keys.
 3. **Create the tables** by running `server/db/schema.sql` in Supabase (one time).
+   Small **additive columns** (e.g. inventory's `quality_rating` / `technician_name`)
+   are also applied automatically at server startup, so you don't need to re-run the
+   whole schema for those.
 4. **Start developing:** `npm run dev` (front-end) — the Express server is wired in.
 5. **Build for production:** `npm run build`, then `npm start`.
 

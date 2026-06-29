@@ -30,6 +30,7 @@ import GoogleMapDirections from "@/components/GoogleMapDirections";
 import CollectorLocationCard from "@/components/CollectorLocationCard";
 import CameraCapture from "@/components/CameraCapture";
 import { Navigation, ChevronDown, ChevronUp, ExternalLink, Mail } from "lucide-react";
+import { api } from "@/lib/api";
 
 export default function LocalCollectorDashboard() {
   const { user, token, logout } = useAuth();
@@ -38,6 +39,7 @@ export default function LocalCollectorDashboard() {
   const [pendingIntents, setPendingIntents] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [hubs, setHubs] = useState([]);
+  const [earnings, setEarnings] = useState({ balanceRs: 0, entries: [] });
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
 
@@ -93,14 +95,19 @@ export default function LocalCollectorDashboard() {
     }
   }, [apiFetch]);
 
+  const fetchEarnings = useCallback(async () => {
+    try { const res = await api.get("/api/earnings/mine"); setEarnings(res || { balanceRs: 0, entries: [] }); }
+    catch (err) { console.error(err); }
+  }, []);
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      await fetchData();
+      await Promise.all([fetchData(), fetchEarnings()]);
       setLoading(false);
     };
     load();
-  }, [fetchData]);
+  }, [fetchData, fetchEarnings]);
 
   const handleAccept = async (intentId) => {
     setActionLoading(intentId);
@@ -296,6 +303,10 @@ export default function LocalCollectorDashboard() {
           <div className="p-5 rounded-lg border border-border bg-card">
             <p className="text-sm text-muted-foreground mb-1">Delivered to Hub</p>
             <p className="text-2xl font-bold text-foreground">{allCollectedItems.length}</p>
+          </div>
+          <div className="p-5 rounded-lg border border-emerald-200 bg-emerald-50/50">
+            <p className="text-sm text-muted-foreground mb-1">My earnings</p>
+            <p className="text-2xl font-bold text-emerald-700">₹{Math.round(earnings.balanceRs)}</p>
           </div>
         </section>
 
