@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { inventory } from '../models/Inventory';
-import { intents } from '../models/Intent';
-import { users } from '../models/User';
-import { verifyAuth, requireRole } from '../middleware/auth';
-import { generateQRCode, generateCollectionId, validateImageDataUrl } from '../utils/helpers';
+import { inventory } from '../models/Inventory.js';
+import { intents } from '../models/Intent.js';
+import { users } from '../models/User.js';
+import { verifyAuth, requireRole } from '../middleware/auth.js';
+import { generateQRCode, generateCollectionId, validateImageDataUrl } from '../utils/helpers.js';
 import { haversineKm } from '../utils/distance.js';
 import { notify } from '../services/notificationService.js';
 

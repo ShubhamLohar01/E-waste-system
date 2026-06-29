@@ -1,5 +1,5 @@
-import { rewards } from '../models/Reward';
-import { inventory } from '../models/Inventory';
+import { rewards } from '../models/Reward.js';
+import { inventory } from '../models/Inventory.js';
 import { nextId, PREFIX } from '../utils/idGenerator.js';
 
 /**

@@ -1,6 +1,6 @@
-import { demands } from '../models/Demand';
-import { inventory } from '../models/Inventory';
-import { deliveries } from '../models/Delivery';
+import { demands } from '../models/Demand.js';
+import { inventory } from '../models/Inventory.js';
+import { deliveries } from '../models/Delivery.js';
 import { nextId, PREFIX } from '../utils/idGenerator.js';
 
 /**

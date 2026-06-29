@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { intents } from '../models/Intent';
-import { inventory } from '../models/Inventory';
-import { verifyAuth, requireRole } from '../middleware/auth';
-import { generateQRCode } from '../utils/helpers';
+import { intents } from '../models/Intent.js';
+import { inventory } from '../models/Inventory.js';
+import { verifyAuth, requireRole } from '../middleware/auth.js';
+import { generateQRCode } from '../utils/helpers.js';
 import { nextId, PREFIX } from '../utils/idGenerator.js';
 
 const router = Router();

@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { disputes } from '../models/Dispute';
-import { users } from '../models/User';
-import { inventory } from '../models/Inventory';
-import { verifyAuth } from '../middleware/auth';
+import { disputes } from '../models/Dispute.js';
+import { users } from '../models/User.js';
+import { inventory } from '../models/Inventory.js';
+import { verifyAuth } from '../middleware/auth.js';
 import { nextId, PREFIX } from '../utils/idGenerator.js';
 import { validate, disputeCreateSchema } from '../schemas.js';
 import { notify } from '../services/notificationService.js';

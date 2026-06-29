@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { intents } from '../models/Intent';
-import { generateQRCode, validateImageDataUrl, validateInvoiceDataUrl } from '../utils/helpers';
+import { intents } from '../models/Intent.js';
+import { generateQRCode, validateImageDataUrl, validateInvoiceDataUrl } from '../utils/helpers.js';
 import { nextId, PREFIX } from '../utils/idGenerator.js';
-import { verifyAuth, requireRole } from '../middleware/auth';
-import { inventory } from '../models/Inventory';
-import { rewards } from '../models/Reward';
-import { users } from '../models/User';
+import { verifyAuth, requireRole } from '../middleware/auth.js';
+import { inventory } from '../models/Inventory.js';
+import { rewards } from '../models/Reward.js';
+import { users } from '../models/User.js';
 import { haversineKm, sortByDistanceFrom } from '../utils/distance.js';
 import { notify, notifyMany } from '../services/notificationService.js';
 import { validate, intentSchema } from '../schemas.js';

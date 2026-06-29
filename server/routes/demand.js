@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { demands } from '../models/Demand';
-import { inventory } from '../models/Inventory';
-import { deliveries } from '../models/Delivery';
-import { verifyAuth, requireRole } from '../middleware/auth';
+import { demands } from '../models/Demand.js';
+import { inventory } from '../models/Inventory.js';
+import { deliveries } from '../models/Delivery.js';
+import { verifyAuth, requireRole } from '../middleware/auth.js';
 import { nextId, PREFIX } from '../utils/idGenerator.js';
 
 const router = Router();

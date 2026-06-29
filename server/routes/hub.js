@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { inventory } from '../models/Inventory';
-import { users } from '../models/User';
-import { verifyAuth, requireRole } from '../middleware/auth';
+import { inventory } from '../models/Inventory.js';
+import { users } from '../models/User.js';
+import { verifyAuth, requireRole } from '../middleware/auth.js';
 import { maskCode } from '../utils/helpers.js';
 import { notify } from '../services/notificationService.js';
 import { validate, hubVerifySchema, confirmPrintSchema } from '../schemas.js';
-import { boxes } from '../models/Box';
+import { boxes } from '../models/Box.js';
 import {
   generateTransactionNo,
   generateBoxPrefix,

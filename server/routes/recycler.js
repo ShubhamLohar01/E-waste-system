@@ -1,14 +1,14 @@
 import { Router } from 'express';
-import { inventory } from '../models/Inventory';
-import { deliveries } from '../models/Delivery';
-import { users } from '../models/User';
+import { inventory } from '../models/Inventory.js';
+import { deliveries } from '../models/Delivery.js';
+import { users } from '../models/User.js';
 import { recyclerRequests } from '../models/RecyclerRequest.js';
-import { verifyAuth, requireRole } from '../middleware/auth';
+import { verifyAuth, requireRole } from '../middleware/auth.js';
 import { nextId, PREFIX } from '../utils/idGenerator.js';
 import { maskCode } from '../utils/helpers.js';
 import { notify } from '../services/notificationService.js';
 import { validate, assignDeliverySchema, recyclerRequestSchema, acknowledgeBoxSchema, recyclerQualitySchema } from '../schemas.js';
-import { boxes } from '../models/Box';
+import { boxes } from '../models/Box.js';
 import { verifyBoxQr } from '../utils/boxCodes.js';
 
 const router = Router();

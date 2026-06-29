@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { deliveries } from '../models/Delivery';
-import { inventory } from '../models/Inventory';
-import { users } from '../models/User';
-import { verifyAuth, requireRole } from '../middleware/auth';
+import { deliveries } from '../models/Delivery.js';
+import { inventory } from '../models/Inventory.js';
+import { users } from '../models/User.js';
+import { verifyAuth, requireRole } from '../middleware/auth.js';
 import { notify } from '../services/notificationService.js';
-import { verifyQRCode, validateImageDataUrl } from '../utils/helpers';
+import { verifyQRCode, validateImageDataUrl } from '../utils/helpers.js';
 
 const router = Router();
 

@@ -1,19 +1,19 @@
 import { Router } from 'express';
-import { users } from '../models/User';
-import { hashPassword, comparePassword, generateId } from '../utils/helpers';
+import { users } from '../models/User.js';
+import { hashPassword, comparePassword, generateId } from '../utils/helpers.js';
 import { nextId, PREFIX } from '../utils/idGenerator.js';
 import {
   generateToken,
   generateVerificationToken,
   verifyVerificationToken,
   verifyAuth,
-} from '../middleware/auth';
+} from '../middleware/auth.js';
 import {
   setEmailCode,
   verifyEmailCode,
   sendVerificationEmail,
-} from '../utils/verification';
-import { rewards } from '../models/Reward';
+} from '../utils/verification.js';
+import { rewards } from '../models/Reward.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { validate, registerSchema, registerWithEmailSchema, profileUpdateSchema, PUBLIC_ROLES } from '../schemas.js';
 

@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { rewards } from '../models/Reward';
-import { inventory } from '../models/Inventory';
-import { verifyAuth } from '../middleware/auth';
+import { rewards } from '../models/Reward.js';
+import { inventory } from '../models/Inventory.js';
+import { verifyAuth } from '../middleware/auth.js';
 
 const router = Router();
 

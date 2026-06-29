@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { users } from '../models/User';
-import { inventory } from '../models/Inventory';
-import { intents } from '../models/Intent';
-import { disputes } from '../models/Dispute';
+import { users } from '../models/User.js';
+import { inventory } from '../models/Inventory.js';
+import { intents } from '../models/Intent.js';
+import { disputes } from '../models/Dispute.js';
 import { payments } from '../models/Payment.js';
 import { recyclerRequests } from '../models/RecyclerRequest.js';
-import { verifyAuth, requireRole } from '../middleware/auth';
+import { verifyAuth, requireRole } from '../middleware/auth.js';
 import { nextId, PREFIX } from '../utils/idGenerator.js';
 import { notify } from '../services/notificationService.js';
 import { RewardEngine } from '../services/rewardEngine.js';
