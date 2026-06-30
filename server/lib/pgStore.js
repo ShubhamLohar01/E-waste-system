@@ -187,9 +187,19 @@ export async function hydrateAll() {
   console.log(`[pgStore] hydrated from Postgres: ${TABLES.map((t) => `${t.name}=${t.array.length}`).join(' ')}`);
 }
 
-/** Persist all in-memory arrays back to Postgres in one transaction. */
+/**
+ * Persist all in-memory arrays back to Postgres in one transaction.
+ *
+ * NON-DESTRUCTIVE: upserts (insert-or-update by primary key) and never deletes —
+ * so rows added/edited directly in the DB are preserved, not wiped. (Previously
+ * this did a full delete-all + re-insert, which clobbered any out-of-band DB edit.)
+ *
+ * Set DISABLE_FLUSH=1 in the environment to turn off all DB writes (full manual
+ * control of the database; in-app changes then live only in memory until restart).
+ */
 export async function flushAll() {
-  // Safety: never wipe the DB if we haven't successfully hydrated yet.
+  if (process.env.DISABLE_FLUSH === '1') return;
+  // Safety: don't write if we haven't successfully hydrated yet.
   if (!hydrated) return;
   let client;
   let hadError = false;
@@ -203,11 +213,13 @@ export async function flushAll() {
       console.error('[pgStore] flush client error (ignored, changes kept in memory):', e.message);
     });
     await client.query('begin');
-    for (const t of [...TABLES].reverse()) await client.query(`delete from ${t.name}`);
     for (const t of TABLES) {
+      const pk = t.columns[0]; // first column is the PK ('id', or 'category' for category_prices)
       const cols = t.columns.join(', ');
       const ph = t.columns.map((c, i) => (t.jsonb.includes(c) ? `$${i + 1}::jsonb` : `$${i + 1}`)).join(', ');
-      const sql = `insert into ${t.name} (${cols}) values (${ph})`;
+      const setList = t.columns.filter((c) => c !== pk).map((c) => `${c}=excluded.${c}`).join(', ');
+      const conflict = setList ? `do update set ${setList}` : 'do nothing';
+      const sql = `insert into ${t.name} (${cols}) values (${ph}) on conflict (${pk}) ${conflict}`;
       for (const rec of t.array) await client.query(sql, t.toRow(rec));
     }
     await client.query('commit');
