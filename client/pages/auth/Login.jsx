@@ -6,11 +6,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { useAuth } from '@/context/AuthContext';
 import { GoogleSignInButton } from '@/components/GoogleSignInButton';
-import { AlertCircle, Loader2, Recycle, Mail } from 'lucide-react';
+import { AlertCircle, Loader2, Recycle, Mail, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [gmailEmail, setGmailEmail] = useState('');
   const [emailCode, setEmailCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -167,14 +168,22 @@ export default function Login() {
     },
     {
       role: 'Hubs',
-      password: 'hub123',
+      password: 'Test@1234',
       accounts: [
-        { name: 'Vedant Rane (Hub A)',      email: 'vedant.rane@ewaste.com',      tag: 'Koregaon Park' },
-        { name: 'Vipul Ware (Hub B)',       email: 'vipul.ware@ewaste.com',       tag: 'Warje' },
-        { name: 'Aditya Joshi (Hub C)',     email: 'aditya.joshi@ewaste.com',     tag: 'Hinjewadi' },
-        { name: 'Neha Deshmukh (Hub D)',    email: 'neha.deshmukh@ewaste.com',    tag: 'Kharadi' },
-        { name: 'Amol Gaikwad (Hub E)',     email: 'amol.gaikwad@ewaste.com',     tag: 'Aundh' },
-        { name: 'Siddharth Kamble (Hub F)', email: 'siddharth.kamble@ewaste.com', tag: 'Hadapsar' },
+        { name: 'Maharashtra Scrap Traders', email: 'maharashtra.scrap.traders@ewaste.in', tag: 'Nashik' },
+        { name: 'Scrapwale', email: 'scrapwale@ewaste.in', tag: 'Nashik' },
+        { name: 'Shah Scrap Traders', email: 'shah.scrap.traders@ewaste.in', tag: 'Nashik' },
+        { name: 'Kohinoor Scrap Centre', email: 'kohinoor.scrap.centre@ewaste.in', tag: 'Nashik' },
+        { name: 'New Kohetoor Traders', email: 'new.kohetoor.traders@ewaste.in', tag: 'Nashik' },
+        { name: 'Scrap Wala Kohetoor Traders', email: 'scrap.wala.kohetoor.traders@ewaste.in', tag: 'Nashik' },
+        { name: 'Zahir Scrap Center', email: 'zahir.scrap.center@ewaste.in', tag: 'Nashik' },
+        { name: 'Kuldeep E-Waste Disposals', email: 'kuldeep.e.waste.disposals@ewaste.in', tag: 'Pune' },
+        { name: 'Roshani Scrap Center', email: 'roshani.scrap.center@ewaste.in', tag: 'Pimpri-Chinchwad' },
+        { name: 'Harshita Green Recyclers', email: 'harshita.green.recyclers@ewaste.in', tag: 'Pune' },
+        { name: 'Arafat Enterprises', email: 'arafat.enterprises@ewaste.in', tag: 'Pimpri-Chinchwad' },
+        { name: 'D D Electronic Equipments Pvt Ltd', email: 'd.d.electronic.equipments.pvt.ltd@ewaste.in', tag: 'Pimpri-Chinchwad' },
+        { name: 'Akanksha Enterprises', email: 'akanksha.enterprises@ewaste.in', tag: 'Nagpur' },
+        { name: 'Naushad Scrap Mart', email: 'naushad.scrap.mart@ewaste.in', tag: 'Nagpur' },
       ],
     },
     {
@@ -195,18 +204,27 @@ export default function Login() {
     },
     {
       role: 'Recycler companies',
-      password: 'recycler123',
+      password: 'Test@1234',
       accounts: [
-        { name: 'EcoCycle Recyclers Pvt Ltd', email: 'ops@ecocycle.in',              tag: 'Talegaon MIDC · ₹48/kg' },
-        { name: 'GreenMetal Industries',      email: 'procurement@greenmetal.in',    tag: 'Chakan MIDC · ₹55/kg' },
-        { name: 'ReNewTech Solutions',        email: 'sales@renewtech.io',           tag: 'Phursungi · ₹52/kg' },
-        { name: 'Vasundhara E-Waste',         email: 'contact@vasundhara-ewaste.in', tag: 'Bhosari MIDC · ₹50/kg' },
-        { name: 'Triveni Recycling',          email: 'ops@trivenirecycling.in',      tag: 'Alandi Rd · ₹46/kg' },
-        { name: 'CircuitLoop Industries',     email: 'hello@circuitloop.co',         tag: 'Pimpri · ₹58/kg' },
-        { name: 'EcoRevive Resources',        email: 'info@ecorevive.in',            tag: 'Ranjangaon · ₹54/kg' },
-        { name: 'MetalMine Recyclers',        email: 'procurement@metalmine.co.in',  tag: 'Uruli Kanchan · ₹60/kg' },
-        { name: 'PlasticPulse Solutions',     email: 'business@plasticpulse.in',     tag: 'Kharadi EPIP · ₹42/kg' },
-        { name: 'Saksham Green Tech',         email: 'orders@sakshamgreen.in',       tag: 'Bhosari · ₹53/kg' },
+        { name: 'Eco Recycling Ltd (Ecoreco)', email: 'eco.recycling.ltd.ecoreco@ewaste.in', tag: 'Mumbai' },
+        { name: 'Suritex Pvt Ltd', email: 'suritex.pvt.ltd@ewaste.in', tag: 'Nagpur' },
+        { name: 'Eco Reset Pvt Ltd', email: 'eco.reset.pvt.ltd@ewaste.in', tag: 'Nagpur' },
+        { name: 'Nagraj E-Waste Recycling', email: 'nagraj.e.waste.recycling@ewaste.in', tag: 'Nagpur' },
+        { name: 'Pune Green Electronic Waste Recycler Pvt Ltd', email: 'pune.green.electronic.waste.recycler.pvt@ewaste.in', tag: 'Pune' },
+        { name: 'GNR Recycling India Pvt Ltd', email: 'gnr.recycling.india.pvt.ltd@ewaste.in', tag: 'Pune' },
+        { name: 'Green IT Recycling Center Pvt Ltd', email: 'green.it.recycling.center.pvt.ltd@ewaste.in', tag: 'Pune' },
+        { name: 'Green Life E-Waste Recycling Pvt Ltd', email: 'green.life.e.waste.recycling.pvt.ltd@ewaste.in', tag: 'Chh. Sambhajinagar' },
+        { name: 'Perfect E-Waste Recyclers', email: 'perfect.e.waste.recyclers@ewaste.in', tag: 'Chh. Sambhajinagar' },
+        { name: 'Erecon Recycling Pvt Ltd', email: 'erecon.recycling.pvt.ltd@ewaste.in', tag: 'Chh. Sambhajinagar' },
+        { name: 'ECO Friend Industries', email: 'eco.friend.industries@ewaste.in', tag: 'Navi Mumbai' },
+        { name: 'GNG Electronics Pvt Ltd', email: 'gng.electronics.pvt.ltd@ewaste.in', tag: 'Navi Mumbai' },
+        { name: 'E-Survival Recycling Pvt Ltd', email: 'e.survival.recycling.pvt.ltd@ewaste.in', tag: 'Solapur' },
+        { name: 'Solapur Econ Recyfine', email: 'solapur.econ.recyfine@ewaste.in', tag: 'Solapur' },
+        { name: 'Mahesh Traders', email: 'mahesh.traders@ewaste.in', tag: 'Kolhapur' },
+        { name: 'Trekomac Refurbs Pvt Ltd', email: 'trekomac.refurbs.pvt.ltd@ewaste.in', tag: 'Kolhapur' },
+        { name: 'Arihant E Recycling Pvt Ltd', email: 'arihant.e.recycling.pvt.ltd@ewaste.in', tag: 'Dhule' },
+        { name: 'Techeco Waste Management LLP', email: 'techeco.waste.management.llp@ewaste.in', tag: 'Nashik' },
+        { name: 'Sairakesh India Pvt Ltd', email: 'sairakesh.india.pvt.ltd@ewaste.in', tag: 'Nashik' },
       ],
     },
   ];
@@ -262,7 +280,25 @@ export default function Login() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Password</label>
-                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
+                <div className="relative">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               <Button type="submit" disabled={isLoading} className="w-full gap-2">
                 {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Logging in...</> : 'Login'}
